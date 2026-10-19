@@ -18,6 +18,9 @@ import { TaxCalc } from './pages/TaxCalc';
 import { Reports } from './pages/Reports';
 import { Reconciliation } from './pages/Reconciliation';
 import { Settings } from './pages/Settings';
+import { Tutorials } from './pages/Tutorials';
+import { TourProvider } from './tour/TourEngine';
+import { TutorialButton } from './tour/TutorialButton';
 import { APP_VERSION } from '../services/settings';
 
 export const NAV = [
@@ -30,7 +33,8 @@ export const NAV = [
   { path: '/tax-calc', label: 'Tax Calculations', el: <TaxCalc /> },
   { path: '/reports', label: 'Reports & PDF Export', el: <Reports /> },
   { path: '/reconciliation', label: 'Reconciliation', el: <Reconciliation /> },
-  { path: '/settings', label: 'Settings & Data', el: <Settings /> }
+  { path: '/settings', label: 'Settings & Data', el: <Settings /> },
+  { path: '/tutorials', label: 'Tutorials', el: <Tutorials /> }
 ];
 
 function SaveIndicator() {
@@ -169,7 +173,7 @@ function Shell() {
         <div className="nav">
           {NAV.map((n, i) => (
             <NavLink key={n.path} to={n.path} end={n.path === '/'}>
-              <span className="num">{i + 1}</span>
+              <span className="num">{i < 10 ? i + 1 : '?'}</span>
               {n.label}
             </NavLink>
           ))}
@@ -182,6 +186,7 @@ function Shell() {
           <FySelect />
           <BackupReminder />
           <span className="spacer" />
+          <TutorialButton />
           <SaveIndicator />
           <span className={`net-ind ${online ? '' : 'offline'}`} role="status">
             {online ? 'Online' : 'Offline'}
@@ -203,7 +208,9 @@ export function App() {
   return (
     <AppProvider>
       <HashRouter>
-        <Shell />
+        <TourProvider>
+          <Shell />
+        </TourProvider>
       </HashRouter>
     </AppProvider>
   );

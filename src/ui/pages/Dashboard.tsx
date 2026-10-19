@@ -12,6 +12,7 @@ import { useInstruments, useQuality, useTaxYear } from '../hooks';
 import { Disclaimer, Money, Stat, StatusBadge } from '../components/ui';
 import { TraceModal } from '../components/TxnTable';
 import { loadDemoData } from '../../services/demo';
+import { useTour } from '../tour/TourEngine';
 
 const sumLines = (ls: TaxLine[], keys?: string[]) => {
   let total = D(0);
@@ -32,6 +33,7 @@ export function Dashboard() {
   const { value: r, loading, error } = useTaxYear(fy);
   const { value: q } = useQuality(fy);
   const [trace, setTrace] = useState<{ title: string; ids: string[] } | null>(null);
+  const { start } = useTour();
   const instruments = useInstruments();
   const counts = useLiveQuery(async () => {
     const db = getDb();
@@ -89,6 +91,9 @@ export function Dashboard() {
             <li>Review <a href="#/reconciliation">data-quality issues</a>, then generate reports in <a href="#/reports">Reports</a>.</li>
             <li>Export a backup regularly: <a href="#/settings?tab=backup">Settings → Backup</a>. Browser storage alone is not a backup.</li>
           </ol>
+          <div className="notice" style={{ marginTop: 8 }}>
+            New here? <button className="primary small" onClick={() => start('getting-started')}>Take the 4-minute guided tour</button> or open <a href="#/tutorials">all interactive tutorials</a>.
+          </div>
           <p className="muted">Want to explore first? Load fictional demonstration data (clearly marked, removable in Settings → Data health).</p>
           <button onClick={() => run(() => loadDemoData(), { success: 'Demonstration data loaded (fictional, marked DEMO).' }).then(() => settings.selectedFY !== 2025 && nav('/'))}>Load demonstration data</button>
         </div>

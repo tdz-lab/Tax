@@ -189,3 +189,29 @@ table.dt tfoot td { font-weight: 600; background: var(--panel-2); }
   .panel { box-shadow: none; break-inside: avoid; }
   body { background: #fff; color: #000; }
 }
+
+/* ---------- Interactive tutorials ---------- */
+.tour-mask { position: fixed; inset: 0; background: rgba(15, 20, 28, 0.45); z-index: 90; pointer-events: none; }
+.tour-spot { position: fixed; z-index: 90; border-radius: 6px; box-shadow: 0 0 0 3px #f5b942, 0 0 0 9999px rgba(15, 20, 28, 0.45); pointer-events: none; transition: left 0.15s, top 0.15s, width 0.15s, height 0.15s; }
+.tour-card { position: fixed; z-index: 100; width: min(400px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; background: var(--panel); color: var(--text); border: 1px solid var(--border-strong); border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); padding: 12px 14px; font-size: 13px; }
+.tour-card.static { position: relative; width: min(480px, 100%); }
+.tour-card h3 { margin: 4px 0 6px; font-size: 15px; }
+.tour-card p { margin: 0 0 6px; }
+.tour-card ul { margin: 0 0 6px; padding-left: 18px; }
+.tour-card li { margin-bottom: 2px; }
+.tour-kicker { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+.tour-progress { height: 3px; background: var(--border); border-radius: 2px; margin: 6px 0 4px; overflow: hidden; }
+.tour-progress > div { height: 100%; background: var(--accent); }
+.tour-try { border: 1px dashed var(--accent); background: var(--accent-weak); border-radius: 4px; padding: 6px 8px; margin: 6px 0; }
+.tour-try.done { border-color: var(--ok); background: var(--ok-weak); }
+.tour-try.skipped { opacity: 0.7; }
+.tour-note { font-size: 12px; color: var(--warn); }
+.tour-actions { display: flex; gap: 6px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.tour-modal { position: fixed; inset: 0; z-index: 100; background: rgba(15, 20, 28, 0.45); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.tutorial-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.tutorial-item { border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; background: var(--panel); display: flex; flex-direction: column; gap: 4px; }
+.tutorial-item h3 { margin: 0; }
+.tutorial-menu { position: absolute; right: 0; top: 110%; width: min(360px, calc(100vw - 32px)); background: var(--panel); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.18); z-index: 45; padding: 8px; }
+.tutorial-menu button.item { width: 100%; text-align: left; border: none; border-radius: 4px; display: block; padding: 6px 8px; }
+.tutorial-menu button.item:hover { background: var(--accent-weak); }
+@media print { .tour-card, .tour-mask, .tour-spot, .tour-modal { display: none !important; } }
