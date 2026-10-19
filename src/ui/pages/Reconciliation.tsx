@@ -91,7 +91,8 @@ function BalancesTab() {
   const accounts = useAccounts();
   const instruments = useInstruments();
   const { value: ws } = useWorkspace();
-  const items = useLiveQuery(() => getDb().reconciliation.toArray(), [], []) ?? [];
+  const itemsQ = useLiveQuery(() => getDb().reconciliation.toArray(), []);
+  const items = useMemo(() => itemsQ ?? [], [itemsQ]);
   const [edit, setEdit] = useState<Partial<ReconciliationItem> | null>(null);
   const checks = useMemo(() => (ws ? reconcileBalances(ws.data, items, ws.deriv) : []), [ws, items]);
   const acct = new Map(accounts.map((a) => [a.id, a]));
@@ -147,7 +148,8 @@ function TransfersTab() {
   const { run } = useApp();
   const instruments = useInstruments();
   const accounts = useAccounts();
-  const txns = useLiveQuery(() => getDb().transactions.filter((t) => t.status === 'active' && (t.side === 'send' || t.side === 'receive')).toArray(), [], []) ?? [];
+  const txnsQ = useLiveQuery(() => getDb().transactions.filter((t) => t.status === 'active' && (t.side === 'send' || t.side === 'receive')).toArray(), []);
+  const txns = useMemo(() => txnsQ ?? [], [txnsQ]);
   const suggestions = useMemo(() => suggestTransferMatches(txns), [txns]);
   const byId = new Map(txns.map((t) => [t.id, t]));
   const inst = new Map(instruments.map((i) => [i.id, i]));
@@ -196,8 +198,8 @@ function TransfersTab() {
 
 function DuplicatesTab() {
   const { run, toast } = useApp();
-  const txns = useLiveQuery(() => getDb().transactions.where('status').equals('active').toArray(), [], []) ?? [];
-  const groups = useMemo(() => findDuplicateGroups(txns), [txns]);
+  const txns = useLiveQuery(() => getDb().transactions.where('status').equals('active').toArray(), []);
+  const groups = useMemo(() => findDuplicateGroups(txns ?? []), [txns]);
   const [selected, setSelected] = useState<Transaction[] | null>(null);
   return (
     <div className="panel">

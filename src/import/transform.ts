@@ -19,7 +19,7 @@ export interface ParsedFile {
 }
 
 export function parseCsv(text: string, opts: { delimiter?: string; skipRows?: number } = {}): ParsedFile {
-  let body = text.replace(/^﻿/, '');
+  let body = text.replace(/^\uFEFF/, '');
   if (opts.skipRows && opts.skipRows > 0) body = body.split(/\r?\n/).slice(opts.skipRows).join('\n');
   const res = Papa.parse<Record<string, string>>(body, {
     header: true,

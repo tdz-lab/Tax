@@ -100,14 +100,14 @@ function DocModal({ doc, onClose }: { doc: DocumentMeta; onClose: () => void }) 
   const [confirm, setConfirm] = useState(false);
   const [q, setQ] = useState('');
   const [newRec, setNewRec] = useState<Partial<Transaction> | null>(null);
-  const linked = useLiveQuery(() => getDb().transactions.bulkGet(d.linkedRecordIds), [d.linkedRecordIds], []) ?? [];
+  const linked = useLiveQuery(() => getDb().transactions.bulkGet(d.linkedRecordIds), [d.linkedRecordIds]);
   const live = useLiveQuery(() => getDb().documents.get(doc.id), [doc.id]);
   const candidates = useLiveQuery(async () => {
     if (q.trim().length < 2) return [];
     const term = q.toLowerCase();
     return getDb().transactions.filter((t) => t.status === 'active' && `${t.description} ${t.counterparty ?? ''} ${t.date} ${t.amount}`.toLowerCase().includes(term)).limit(10).toArray();
   }, [q]);
-  const linkedRows = useMemo(() => linked.filter(Boolean) as Transaction[], [linked]);
+  const linkedRows = useMemo(() => (linked ?? []).filter(Boolean) as Transaction[], [linked]);
   return (
     <Modal
       title={`Document — ${d.title}`}

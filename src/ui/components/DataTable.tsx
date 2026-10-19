@@ -127,7 +127,10 @@ export function DataTable<T>({ id, rows, columns, rowKey, onRowClick, selectable
                     checked={allOnPage}
                     onChange={() => {
                       const s = new Set(selected);
-                      for (const r of slice) allOnPage ? s.delete(rowKey(r)) : s.add(rowKey(r));
+                      for (const r of slice) {
+                        if (allOnPage) s.delete(rowKey(r));
+                        else s.add(rowKey(r));
+                      }
                       onSelectedChange?.(s);
                     }}
                   />

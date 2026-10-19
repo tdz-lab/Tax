@@ -2,12 +2,14 @@
 import Papa from 'papaparse';
 import { D, dstr } from '../lib/decimal';
 import { TAX_CLASS_INFO } from '../domain/reference';
-import { audOf } from '../engines/ledger';
+import { audOf, grossOf } from '../engines/ledger';
 import type { ReportContext } from './reportData';
 
 export function ledgerCsv(ctx: ReportContext): string {
   const rows = ctx.txns.map((t) => {
-    const aud = audOf(t, t.amount);
+    const signed = t.side === 'realised_pnl' || t.side === 'financing' || t.side === 'settlement';
+    const gross = signed ? D(t.amount) : grossOf(t, t.instrumentId ? ctx.instruments.get(t.instrumentId) : undefined);
+    const aud = audOf(t, gross);
     return {
       id: t.id,
       date: t.date,
@@ -30,7 +32,7 @@ export function ledgerCsv(ctx: ReportContext): string {
       price: t.price ?? '',
       multiplier: t.multiplier ?? '',
       currency: t.currency,
-      amount: t.amount,
+      amount: dstr(gross),
       fees: dstr(D(t.commission).plus(D(t.exchangeFees)).plus(D(t.otherFees))),
       aud_per_unit: t.fx?.audPerUnit ?? (t.currency === 'AUD' ? '1' : ''),
       rate_source: t.fx?.source ?? '',

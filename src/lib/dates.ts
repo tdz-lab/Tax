@@ -126,7 +126,8 @@ export function addDays(isoDate: string, days: number): string {
 
 /** Whole days between two ISO dates (b - a). */
 export function daysBetween(a: string, b: string): number {
-  return Math.round(DateTime.fromISO(b).diff(DateTime.fromISO(a), 'days').days);
+  const t = (s: string) => Date.UTC(Number(s.slice(0, 4)), Number(s.slice(5, 7)) - 1, Number(s.slice(8, 10)));
+  return Math.round((t(b) - t(a)) / 86_400_000);
 }
 
 /**
@@ -136,8 +137,13 @@ export function daysBetween(a: string, b: string): number {
  * the 12-month anniversary of acquisition (e.g. acquired 1 Jul 2023 → qualifies from 2 Jul 2024).
  */
 export function heldAtLeast12Months(acquiredLocalDate: string, disposedLocalDate: string): boolean {
-  const anniversary = DateTime.fromISO(acquiredLocalDate).plus({ years: 1 });
-  return DateTime.fromISO(disposedLocalDate) > anniversary;
+  const y = Number(acquiredLocalDate.slice(0, 4)) + 1;
+  const m = acquiredLocalDate.slice(5, 7);
+  let d = acquiredLocalDate.slice(8, 10);
+  const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+  if (m === '02' && d === '29' && !leap) d = '28';
+  const anniversary = `${String(y).padStart(4, '0')}-${m}-${d}`;
+  return disposedLocalDate.slice(0, 10) > anniversary;
 }
 
 export function listFYs(from: FYear, to: FYear): FYear[] {

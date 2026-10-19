@@ -11,7 +11,7 @@ import { D, formatMoney, formatQty, tryD } from '../../lib/decimal';
 import { formatInstant, nowIso, localDateOf } from '../../lib/dates';
 import { newId } from '../../lib/ids';
 import { gstFromInclusive } from '../../engines/business/gst';
-import { audOf } from '../../engines/ledger';
+import { audOf, grossOf } from '../../engines/ledger';
 import { clearRateOverride, overrideRate, saveEntity, saveTransaction, softDeleteTransactions, restoreTransactions, ValidationError } from '../../services/ledger';
 import { addDocument, linkDocument } from '../../services/documents';
 import { getWorkspace } from '../../services/calc';
@@ -135,7 +135,9 @@ export function TxnEditor({ initial, onClose }: { initial: Draft; onClose: () =>
   const inst = instruments.find((i) => i.id === draft.instrumentId);
   const cats = categories.filter((c) => !c.archived && c.type === (kind === 'income' ? 'income' : 'expense'));
   const current = stored ?? (draft as Transaction);
-  const aud = current.currency && current.amount ? audOf(current as Transaction, current.amount) : null;
+  const signedSide = draft.side === 'realised_pnl' || draft.side === 'financing' || draft.side === 'settlement';
+  const grossDraft = kind === 'trade' && !signedSide ? grossOf(draft as Transaction, inst) : D(draft.amount || '0');
+  const aud = current.currency ? audOf({ ...(draft as Transaction), fx: stored?.fx }, grossDraft) : null;
 
   const close = async () => {
     if (savedId && dirty.current) await persist(draft);
@@ -220,11 +222,11 @@ export function TxnEditor({ initial, onClose }: { initial: Draft; onClose: () =>
         {kind === 'trade' && ['realised_pnl', 'financing', 'settlement'].includes(draft.side ?? '') ? (
           <DecimalInput label="Amount (signed: + profit / − loss or charge)" value={draft.amount} onChange={(v) => set({ amount: v })} allowNegative required />
         ) : (
-          <DecimalInput label={kind === 'trade' ? 'Gross consideration (optional — else qty × price × multiplier)' : kind === 'adjustment' ? 'Cost / value (opening balance)' : 'Amount (gross)'} value={draft.amount} onChange={(v) => set({ amount: v })} required={kind === 'income' || kind === 'expense' || kind === 'fee' || kind === 'cash'} />
+          <DecimalInput label={kind === 'trade' ? 'Gross consideration (optional — else qty × price × multiplier)' : kind === 'adjustment' ? 'Cost / value (opening balance)' : 'Amount (gross)'} value={kind === 'trade' && draft.amount === '0' ? undefined : draft.amount} onChange={(v) => set({ amount: v })} required={kind === 'income' || kind === 'expense' || kind === 'fee' || kind === 'cash'} />
         )}
         <div className="field">
           <span className="lbl">AUD value</span>
-          <div style={{ padding: '4px 0' }}>{draft.currency === 'AUD' || !draft.currency ? (draft.amount ? formatMoney(draft.amount) : '—') : aud === null ? <span className="badge bad">rate missing</span> : formatMoney(aud)}</div>
+          <div style={{ padding: '4px 0' }}>{grossDraft.isZero() ? '—' : draft.currency === 'AUD' || !draft.currency ? formatMoney(grossDraft) : aud === null ? <span className="badge bad">rate missing</span> : formatMoney(aud)}</div>
         </div>
       </div>
 
@@ -493,7 +495,7 @@ function FxPanel({ t }: { t: Transaction }) {
       {c ? (
         <dl className="kv">
           <dt>AUD per 1 {t.currency}</dt>
-          <dd className="mono">{c.audPerUnit}</dd>
+          <dd className="mono" title={c.audPerUnit}>{D(c.audPerUnit).toDecimalPlaces(10).toString()}</dd>
           <dt>Rate as quoted</dt>
           <dd>
             {c.sourceRate} ({c.sourceDirection})
@@ -664,8 +666,8 @@ function ProvenancePanel({ t }: { t: Transaction }) {
 
 function AuditPanel({ id }: { id: string }) {
   const { settings } = useApp();
-  const events = useLiveQuery(() => getDb().audit.where('entityId').equals(id).toArray(), [id], []) ?? [];
-  const list = useMemo(() => [...events].sort((a, b) => (a.at < b.at ? 1 : -1)), [events]);
+  const events = useLiveQuery(() => getDb().audit.where('entityId').equals(id).toArray(), [id]);
+  const list = useMemo(() => [...(events ?? [])].sort((a, b) => (a.at < b.at ? 1 : -1)), [events]);
   return (
     <div className="panel">
       <h3>Audit history</h3>

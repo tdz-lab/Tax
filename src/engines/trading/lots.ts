@@ -162,14 +162,14 @@ const byTime = (a: Lot, b: Lot) => (a.acquiredAt < b.acquiredAt ? -1 : a.acquire
  */
 function* lotsInOrder(pool: Lot[], method: CostBasisMethod): Generator<Lot> {
   if (method === 'FIFO' || method === 'SPECIFIC') {
-    for (const l of pool) if (l.qtyRemaining.gt(0)) yield l;
+    for (const l of pool) if (l.qtyRemaining.gt(ZERO)) yield l;
     return;
   }
   if (method === 'LIFO') {
-    for (let i = pool.length - 1; i >= 0; i--) if (pool[i].qtyRemaining.gt(0)) yield pool[i];
+    for (let i = pool.length - 1; i >= 0; i--) if (pool[i].qtyRemaining.gt(ZERO)) yield pool[i];
     return;
   }
-  const open = pool.filter((l) => l.qtyRemaining.gt(0));
+  const open = pool.filter((l) => l.qtyRemaining.gt(ZERO));
   const unit = (l: Lot) => (l.costAud === null ? null : l.costAud.div(l.qtyRemaining));
   open.sort((a, b) => {
     const ua = unit(a);
@@ -189,11 +189,9 @@ function orderLots(lots: Lot[], method: CostBasisMethod): Lot[] {
 
 /** Drop fully consumed lots from a pool (they remain in the engine's full lot list). */
 function compact(pool: Lot[]) {
-  if (pool.length > 32 && pool[0].qtyRemaining.lte(0)) {
-    let w = 0;
-    for (const l of pool) if (l.qtyRemaining.gt(0)) pool[w++] = l;
-    pool.length = w;
-  }
+  let k = 0;
+  while (k < pool.length && pool[k].qtyRemaining.lte(ZERO)) k++;
+  if (k >= 32) pool.splice(0, k);
 }
 
 interface DisposeInput {
@@ -228,19 +226,19 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
         continue;
       }
       const q = Decimal.min(D(pick.quantity), lot.qtyRemaining, remaining);
-      if (q.lte(0)) continue;
+      if (q.lte(ZERO)) continue;
       picks.push({ lot, qty: q });
       remaining = remaining.minus(q);
     }
-    if (remaining.gt(0)) flags.push('Specific identification did not cover the full quantity — remainder matched FIFO.');
+    if (remaining.gt(ZERO)) flags.push('Specific identification did not cover the full quantity — remainder matched FIFO.');
   } else if (method === 'SPECIFIC') {
     flags.push('Specific identification selected but no lots were chosen — FIFO used. Select lots to apply specific identification.');
   }
   for (const lot of lotsInOrder(pool, method === 'SPECIFIC' ? 'FIFO' : method)) {
-    if (remaining.lte(0)) break;
+    if (remaining.lte(ZERO)) break;
     const already = picks.length ? picks.filter((p) => p.lot === lot).reduce((s, p) => s.plus(p.qty), ZERO) : ZERO;
     const avail = lot.qtyRemaining.minus(already);
-    if (avail.lte(0)) continue;
+    if (avail.lte(ZERO)) continue;
     const q = Decimal.min(avail, remaining);
     picks.push({ lot, qty: q });
     remaining = remaining.minus(q);
@@ -276,7 +274,7 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     costTotal = costTotal === null || cost === null ? null : costTotal.plus(cost);
     costNative = costNative === null || cn === null ? null : costNative.plus(cn);
   }
-  if (remaining.gt(0)) {
+  if (remaining.gt(ZERO)) {
     flags.push(`MISSING_COST_BASE: ${dstr(remaining)} unit(s) disposed with no recorded acquisition (holding would go negative).`);
     ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'MISSING_COST_BASE', message: `Disposal of ${dstr(input.quantity)} ${inst.symbol} exceeds recorded holdings by ${dstr(remaining)}.` });
     const proceeds = input.proceedsAud === null ? null : input.proceedsAud.times(remaining).div(input.quantity);
@@ -299,7 +297,7 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     // Split per allocation so mixed holding periods are handled exactly.
     for (const a of allocations) {
       const g = a.gainAud!;
-      if (g.gt(0)) {
+      if (g.gt(ZERO)) {
         if (a.discountEligible) discountable = discountable.plus(g);
         else nonDiscountable = nonDiscountable.plus(g);
       } else loss = loss.plus(g.neg());
@@ -381,7 +379,7 @@ function cryptoQuote(ctx: Ctx, code: string): Instrument | undefined {
 function applyCorporateAction(ctx: Ctx, ca: CorporateAction, atUtc: string) {
   const inst = ctx.instruments.get(ca.instrumentId);
   if (!inst) return;
-  const affected = ctx.allLots.filter((l) => l.instrumentId === ca.instrumentId && l.qtyRemaining.gt(0));
+  const affected = ctx.allLots.filter((l) => l.instrumentId === ca.instrumentId && l.qtyRemaining.gt(ZERO));
   const ratio = D(ca.ratioTo).div(D(ca.ratioFrom || '1'));
   const note = `${ca.type} on ${ca.date} (${ca.ratioFrom}:${ca.ratioTo})`;
   switch (ca.type) {
@@ -498,7 +496,7 @@ function applyCorporateAction(ctx: Ctx, ca: CorporateAction, atUtc: string) {
 function reduceCostForTaxDeferred(ctx: Ctx, t: Transaction) {
   const td = audOf(t, t.taxDeferredAmount);
   if (!t.instrumentId || !td || td.isZero()) return;
-  const lots = ctx.allLots.filter((l) => l.instrumentId === t.instrumentId && l.qtyRemaining.gt(0));
+  const lots = ctx.allLots.filter((l) => l.instrumentId === t.instrumentId && l.qtyRemaining.gt(ZERO));
   const totalQty = lots.reduce((s, l) => s.plus(l.qtyRemaining), ZERO);
   if (totalQty.isZero()) {
     ctx.issues.push({ txnId: t.id, code: 'TAX_DEFERRED_NO_HOLDING', message: 'Tax-deferred distribution recorded but no holding exists to reduce.' });
@@ -597,7 +595,7 @@ export function runLotEngine(data: LedgerData, opts: LotEngineOptions): LotEngin
         const proceeds = value === null || fees === null ? null : value.minus(fees);
         const flags = value === null ? ['MISSING_VALUATION: AUD market value of the swap has not been recorded.'] : [];
         dispose(ctx, { txn: t, instrumentId: inst.id, group, quantity: qty, proceedsAud: proceeds, proceedsNative: null, nativeCurrency: 'AUD', kind: 'swap_out', flags });
-        if (counter && cq && cq.gt(0)) acquire(ctx, t, counter.id, group, cq, value, 'swap', 'counter', value, 'AUD');
+        if (counter && cq && cq.gt(ZERO)) acquire(ctx, t, counter.id, group, cq, value, 'swap', 'counter', value, 'AUD');
         else ctx.issues.push({ txnId: t.id, code: 'SWAP_INCOMPLETE', message: 'Swap is missing the received asset or quantity.' });
         break;
       }
@@ -623,7 +621,7 @@ export function runLotEngine(data: LedgerData, opts: LotEngineOptions): LotEngin
       case 'send': {
         if (t.isOwnTransfer || t.transferPairId) {
           const fq = tryD(t.feeQuantity);
-          if (fq && fq.gt(0)) {
+          if (fq && fq.gt(ZERO)) {
             const v = tryD(t.valuationAud);
             const flags = v === null ? ['MISSING_VALUATION: network fee paid in the asset has no AUD value.'] : [];
             dispose(ctx, { txn: t, instrumentId: inst.id, group, quantity: fq, proceedsAud: v, proceedsNative: null, nativeCurrency: 'AUD', kind: 'fee_disposal', flags });
@@ -640,7 +638,7 @@ export function runLotEngine(data: LedgerData, opts: LotEngineOptions): LotEngin
       }
       case 'expire': {
         if (qty.isZero()) break;
-        const held = getPool(ctx, poolKey(ctx, inst.id, group, t.accountId)).some((l) => l.qtyRemaining.gt(0));
+        const held = getPool(ctx, poolKey(ctx, inst.id, group, t.accountId)).some((l) => l.qtyRemaining.gt(ZERO));
         if (!held) break; // written (short) option expiry is handled by the position engine
         dispose(ctx, { txn: t, instrumentId: inst.id, group, quantity: qty, proceedsAud: ZERO, proceedsNative: ZERO, nativeCurrency: t.currency, kind: 'expiry', flags: ['Option expired — cost is a capital loss (CGT event C2) for capital-account holders.'] });
         break;
@@ -653,7 +651,7 @@ export function runLotEngine(data: LedgerData, opts: LotEngineOptions): LotEngin
           let remaining = qty;
           let cost: Decimal | null = ZERO;
           for (const lot of orderLots(pool, 'FIFO')) {
-            if (remaining.lte(0)) break;
+            if (remaining.lte(ZERO)) break;
             const q = Decimal.min(lot.qtyRemaining, remaining);
             const part = lot.costAud === null ? null : lot.costAud.times(q).div(lot.qtyRemaining);
             if (lot.costAud !== null) lot.costAud = lot.costAud.minus(part!);
@@ -667,7 +665,7 @@ export function runLotEngine(data: LedgerData, opts: LotEngineOptions): LotEngin
             ctx.issues.push({ txnId: t.id, code: 'REVIEW_OPTION_EXERCISE', message: 'Call exercised but no related underlying purchase is linked — link the purchase so the premium is added to its cost base.' });
           } else {
             const existing = ctx.lotByTxn.get(target);
-            if (existing?.length && existing[0].qtyRemaining.gt(0)) {
+            if (existing?.length && existing[0].qtyRemaining.gt(ZERO)) {
               const l = existing[0];
               l.costAud = l.costAud === null || cost === null ? null : l.costAud.plus(cost);
               l.adjustments.push(`Option premium from ${t.id} added to cost base (exercise).`);
@@ -706,7 +704,7 @@ export function runLotEngine(data: LedgerData, opts: LotEngineOptions): LotEngin
 export function holdingsFromLots(lots: Lot[]): Map<string, { qty: Decimal; costAud: Decimal | null; lots: Lot[] }> {
   const m = new Map<string, { qty: Decimal; costAud: Decimal | null; lots: Lot[] }>();
   for (const l of lots) {
-    if (l.qtyRemaining.lte(0)) continue;
+    if (l.qtyRemaining.lte(ZERO)) continue;
     const e = m.get(l.instrumentId) ?? { qty: ZERO, costAud: ZERO as Decimal | null, lots: [] };
     e.qty = e.qty.plus(l.qtyRemaining);
     e.costAud = e.costAud === null || l.costAud === null ? null : e.costAud.plus(l.costAud);

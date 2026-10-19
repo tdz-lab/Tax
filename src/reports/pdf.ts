@@ -11,7 +11,7 @@ import type { AssetClass, Transaction } from '../domain/types';
 import { QUALITY_LABEL } from '../engines/reconciliation/quality';
 import { ruleSetFor } from '../engines/tax/rules';
 import type { TaxLine } from '../engines/tax/taxEngine';
-import { audOf } from '../engines/ledger';
+import { audOf, grossOf } from '../engines/ledger';
 import type { ReportContext } from './reportData';
 
 const DISCLAIMER =
@@ -20,7 +20,7 @@ const DISCLAIMER =
 /** jsPDF core fonts use WinAnsi; map typographic characters to safe equivalents. */
 export function pdfSafe(s: unknown): string {
   return String(s ?? '')
-    .replace(/[–—]/g, '-')
+    .replace(/[–—−]/g, '-')
     .replace(/→/g, '->')
     .replace(/×/g, 'x')
     .replace(/≥/g, '>=')
@@ -32,6 +32,7 @@ export function pdfSafe(s: unknown): string {
     .replace(/Δ/g, 'delta ')
     .replace(/Σ/g, 'Sum ')
     .replace(/✓/g, 'Yes')
+    // eslint-disable-next-line no-control-regex -- deliberately whitelisting tab/CR/LF plus printable Latin-1
     .replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, '?');
 }
 
@@ -249,7 +250,11 @@ export function buildBasicReport(ctx: ReportContext): Blob {
 }
 
 function txnRows(ctx: ReportContext, ts: Transaction[]): RowInput[] {
-  return ts.map((t) => [
+  return ts.map((t) => {
+    const signed = t.side === 'realised_pnl' || t.side === 'financing' || t.side === 'settlement';
+    const gross = signed ? D(t.amount) : grossOf(t, t.instrumentId ? ctx.instruments.get(t.instrumentId) : undefined);
+    const aud = t.instrumentId && t.valuationAud && (t.kind === 'income' || t.side === 'swap') ? D(t.valuationAud) : audOf(t, gross);
+    return [
     fd(ctx, t.date),
     t.time ? formatInstant(t.occurredAt, t.timeZone, { timeFormat: ctx.settings.timeFormat }).split(' ').slice(1).join(' ') + ` ${t.timeZone}` : '',
     acctName(ctx, t.accountId),
@@ -257,11 +262,12 @@ function txnRows(ctx: ReportContext, ts: Transaction[]): RowInput[] {
     t.side ? SIDE_LABEL[t.side] : KIND_LABEL[t.kind],
     t.quantity ? formatQty(t.quantity) : '',
     t.price ? formatQty(t.price, 6) : '',
-    `${formatQty(t.amount, 4)} ${t.currency}`,
+    `${formatQty(gross, 4)} ${t.currency}`,
     formatQty(D(t.commission).plus(D(t.exchangeFees)).plus(D(t.otherFees)), 4),
-    audStr(t),
+    aud === null ? 'NO RATE' : formatMoney(aud),
     TAX_CLASS_INFO[t.taxClass].label
-  ]);
+  ];
+  });
 }
 const TXN_HEAD = ['Date', 'Time (zone)', 'Account', 'Symbol', 'Type', 'Qty', 'Price', 'Gross', 'Fees', 'AUD', 'Classification'];
 
