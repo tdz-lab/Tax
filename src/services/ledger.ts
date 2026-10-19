@@ -161,14 +161,14 @@ export function normaliseTransaction(p: Partial<Transaction>, ref: RefData, sett
     if (v !== undefined && v !== '' && v !== null) (t as any)[k] = v;
   }
   if (t.feeCurrency) t.feeCurrency = t.feeCurrency.toUpperCase();
-  // Classification: an explicit user choice is preserved.
-  const explicit = p.taxClass && (p.taxClassSource === 'user' || p.taxClassSource === 'import') ? p : existing?.taxClassSource === 'user' && !p.taxClass ? existing : null;
-  if (explicit?.taxClass) {
-    t.taxClass = explicit.taxClass;
-    t.taxClassSource = explicit.taxClassSource ?? 'user';
-  } else if (p.taxClass && p.taxClassSource) {
+  // Classification: an explicit user (or import) choice is preserved; taxClassSource 'default' without a class asks for re-derivation.
+  const keepExisting = !('taxClass' in p) && p.taxClassSource !== 'default' && existing && (existing.taxClassSource === 'user' || existing.taxClassSource === 'import');
+  if (p.taxClass && (p.taxClassSource === 'user' || p.taxClassSource === 'import')) {
     t.taxClass = p.taxClass;
     t.taxClassSource = p.taxClassSource;
+  } else if (keepExisting) {
+    t.taxClass = existing!.taxClass;
+    t.taxClassSource = existing!.taxClassSource;
   } else {
     const c = classify(t, {
       account: t.accountId ? ref.accounts.get(t.accountId) : undefined,
@@ -452,4 +452,17 @@ export async function reclassifyAll(reason = 'Classification inputs changed'): P
     await bumpRevision();
   });
   return changed.length;
+}
+
+/** Mark records as confirmed non-duplicates so they stop appearing in duplicate warnings. */
+export async function markNotDuplicate(ids: string[]): Promise<void> {
+  const db = getDb();
+  await db.transaction('rw', [db.transactions, db.audit, db.meta], async () => {
+    for (const id of ids) {
+      const t = await db.transactions.get(id);
+      if (t && !t.reviewFlags.includes('NOT_DUPLICATE')) await db.transactions.put({ ...t, reviewFlags: [...t.reviewFlags, 'NOT_DUPLICATE'], updatedAt: nowIso(), version: t.version + 1 });
+    }
+    await writeAudit({ entityType: 'transaction', entityId: ids.join(',').slice(0, 500), action: 'bulk_update', summary: `Confirmed ${ids.length} record(s) are not duplicates` });
+    await bumpRevision();
+  });
 }

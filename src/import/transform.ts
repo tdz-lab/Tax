@@ -357,10 +357,11 @@ export function prepareRows(rows: Record<string, string>[], ctx: PrepareContext)
         refs.symbol = get('symbol')?.toUpperCase();
         p.quantity = n('quantity');
         const td = n('taxDeferred');
-        if (td) p.taxDeferredAmount = D(td).abs().toFixed();
+        if (td && !D(td).isZero()) p.taxDeferredAmount = D(td).abs().toFixed();
         const cg = n('capitalGain');
-        if (cg) p.capitalGainComponent = D(cg).abs().toFixed();
-        p.category = category || (currency === 'AUD' ? (td || cg ? 'distribution' : 'dividend_au') : 'dividend_foreign');
+        if (cg && !D(cg).isZero()) p.capitalGainComponent = D(cg).abs().toFixed();
+        const hasComponents = (td && D(td).gt(0)) || (cg && D(cg).gt(0));
+        p.category = category || (currency === 'AUD' ? (hasComponents ? 'distribution' : 'dividend_au') : 'dividend_foreign');
         if (p.quantity) delete p.quantity; // units held are informational for dividends; don't create lots
         if (n('quantity')) p.notes = [p.notes, `Units held: ${n('quantity')}`].filter(Boolean).join(' · ');
         break;

@@ -69,7 +69,9 @@ export function findDuplicateGroups(txns: Transaction[]): Transaction[][] {
     m.set(k, arr);
   }
   // Same key AND from different sources/batches (or manual) — identical fills within one import batch are kept apart.
-  return [...m.values()].filter((g) => g.length > 1 && new Set(g.map((t) => t.importBatchId ?? `manual:${t.id}`)).size > 1);
+  return [...m.values()]
+    .map((g) => g.filter((t) => !t.reviewFlags.includes('NOT_DUPLICATE')))
+    .filter((g) => g.length > 1 && new Set(g.map((t) => t.importBatchId ?? `manual:${t.id}`)).size > 1);
 }
 
 export interface TransferSuggestion {

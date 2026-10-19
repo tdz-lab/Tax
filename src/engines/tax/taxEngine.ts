@@ -355,6 +355,13 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
   if (residency === 'working_holiday' || residency === 'part_year') issues.push({ code: 'RESIDENCY_UNSUPPORTED', severity: 'blocking', message: `Residency "${residency}" requires rates/adjustments not implemented — tax estimate unavailable.`, txnIds: [] });
   if (residency === 'non_resident') issues.push({ code: 'NON_RESIDENT', severity: 'warning', message: 'Non-resident: no tax-free threshold, no LITO, no Medicare levy, and CGT discount generally unavailable; only taxable Australian property is subject to CGT — review CGT events.', txnIds: [] });
 
+  // ---------- trading accounts whose tax treatment is undetermined ----------
+  const unresolvedTrades = txnsFY.filter((t) => t.kind === 'trade' && t.accountId && accountsById.get(t.accountId)?.taxTreatment === 'unresolved' && !['evaluation', 'funded_simulated'].includes(accountsById.get(t.accountId)?.propStatus ?? ''));
+  if (unresolvedTrades.length) {
+    const names = [...new Set(unresolvedTrades.map((t) => accountsById.get(t.accountId!)!.name))];
+    issues.push({ code: 'ACCOUNT_TREATMENT', severity: 'blocking', message: `Tax treatment (investor vs trader) not set for: ${names.join(', ')} — their results are excluded until classified.`, txnIds: unresolvedTrades.map((t) => t.id) });
+  }
+
   // ---------- missing FX / classification checks ----------
   const missingFx = txnsFY.filter((t) => t.currency.toUpperCase() !== 'AUD' && !t.fx && !(t.kind === 'cash'));
   if (missingFx.length) issues.push({ code: 'MISSING_RATE', severity: 'blocking', message: `${missingFx.length} transaction(s) have no historical AUD exchange rate.`, txnIds: missingFx.map((t) => t.id) });

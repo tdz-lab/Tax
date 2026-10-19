@@ -3,8 +3,8 @@ import { getDb } from '../db/schema';
 import type { Account, AssetClass, AuditEvent, BusinessProfile, CalculationRun, DocumentMeta, Instrument, TaxProfile, Transaction, UserProfile } from '../domain/types';
 import type { TaxYearResult } from '../engines/tax/taxEngine';
 import { reconcileBalances, type BalanceCheck, type QualityIssue } from '../engines/reconciliation/quality';
-import { holdingsFromLots, type Lot } from '../engines/trading/lots';
-import type { OpenPosition } from '../engines/trading/derivatives';
+import { holdingsFromLots, runLotEngine, type Lot } from '../engines/trading/lots';
+import { runDerivativeEngine, type OpenPosition } from '../engines/trading/derivatives';
 import { fyEnd, type FYear } from '../lib/dates';
 import { computeYear, getWorkspace, qualityIssues, saveCalculationRun } from '../services/calc';
 import { loadSettings } from '../services/settings';
@@ -70,8 +70,6 @@ export async function gatherReportContext(options: ReportOptions, reason: string
   const end = fyEnd(options.fy);
   // Closing holdings: lots acquired by FY end and still open (as at now). Holdings as at FY end require
   // excluding later disposals, so re-run the lot engine on transactions up to FY end.
-  const { runLotEngine } = await import('../engines/trading/lots');
-  const { runDerivativeEngine } = await import('../engines/trading/derivatives');
   const upTo = { ...ws.data, transactions: ws.data.transactions.filter((t) => t.date <= end), corporateActions: ws.data.corporateActions.filter((c) => c.date <= end) };
   const lotsAtEnd = runLotEngine(upTo, { taxTz: settings.taxTimeZone, costBasisDefaults: settings.costBasisDefaults });
   const closingLots = [...holdingsFromLots(lotsAtEnd.lots).values()].flatMap((h) => h.lots).filter((l) => !l.accountId || !options.accountIds || options.accountIds.includes(l.accountId));

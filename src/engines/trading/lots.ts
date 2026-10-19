@@ -154,23 +154,46 @@ function resolveMethod(ctx: Ctx, t: Transaction, inst: Instrument): CostBasisMet
   return ctx.opts.costBasisDefaults[inst.assetClass] ?? 'FIFO';
 }
 
-function orderLots(lots: Lot[], method: CostBasisMethod): Lot[] {
-  const open = lots.filter((l) => l.qtyRemaining.gt(0));
-  const byTime = (a: Lot, b: Lot) => (a.acquiredAt < b.acquiredAt ? -1 : a.acquiredAt > b.acquiredAt ? 1 : a.id < b.id ? -1 : 1);
-  if (method === 'LIFO') return open.sort((a, b) => -byTime(a, b));
-  if (method === 'HIFO') {
-    const unit = (l: Lot) => (l.costAud === null ? null : l.costAud.div(l.qtyRemaining));
-    return open.sort((a, b) => {
-      const ua = unit(a);
-      const ub = unit(b);
-      if (ua === null && ub === null) return byTime(a, b);
-      if (ua === null) return 1;
-      if (ub === null) return -1;
-      const c = ub.cmp(ua);
-      return c !== 0 ? c : byTime(a, b);
-    });
+const byTime = (a: Lot, b: Lot) => (a.acquiredAt < b.acquiredAt ? -1 : a.acquiredAt > b.acquiredAt ? 1 : a.id < b.id ? -1 : 1);
+
+/**
+ * Open lots in selection order. Pools are kept in chronological order (appends happen in event
+ * order; corporate-action moves re-sort the receiving pool), so FIFO/LIFO iterate lazily.
+ */
+function* lotsInOrder(pool: Lot[], method: CostBasisMethod): Generator<Lot> {
+  if (method === 'FIFO' || method === 'SPECIFIC') {
+    for (const l of pool) if (l.qtyRemaining.gt(0)) yield l;
+    return;
   }
-  return open.sort(byTime);
+  if (method === 'LIFO') {
+    for (let i = pool.length - 1; i >= 0; i--) if (pool[i].qtyRemaining.gt(0)) yield pool[i];
+    return;
+  }
+  const open = pool.filter((l) => l.qtyRemaining.gt(0));
+  const unit = (l: Lot) => (l.costAud === null ? null : l.costAud.div(l.qtyRemaining));
+  open.sort((a, b) => {
+    const ua = unit(a);
+    const ub = unit(b);
+    if (ua === null && ub === null) return byTime(a, b);
+    if (ua === null) return 1;
+    if (ub === null) return -1;
+    const c = ub.cmp(ua);
+    return c !== 0 ? c : byTime(a, b);
+  });
+  yield* open;
+}
+
+function orderLots(lots: Lot[], method: CostBasisMethod): Lot[] {
+  return [...lotsInOrder(lots, method)];
+}
+
+/** Drop fully consumed lots from a pool (they remain in the engine's full lot list). */
+function compact(pool: Lot[]) {
+  if (pool.length > 32 && pool[0].qtyRemaining.lte(0)) {
+    let w = 0;
+    for (const l of pool) if (l.qtyRemaining.gt(0)) pool[w++] = l;
+    pool.length = w;
+  }
 }
 
 interface DisposeInput {
@@ -213,10 +236,9 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
   } else if (method === 'SPECIFIC') {
     flags.push('Specific identification selected but no lots were chosen — FIFO used. Select lots to apply specific identification.');
   }
-  const ordered = orderLots(pool, method === 'SPECIFIC' ? 'FIFO' : method);
-  for (const lot of ordered) {
+  for (const lot of lotsInOrder(pool, method === 'SPECIFIC' ? 'FIFO' : method)) {
     if (remaining.lte(0)) break;
-    const already = picks.filter((p) => p.lot === lot).reduce((s, p) => s.plus(p.qty), ZERO);
+    const already = picks.length ? picks.filter((p) => p.lot === lot).reduce((s, p) => s.plus(p.qty), ZERO) : ZERO;
     const avail = lot.qtyRemaining.minus(already);
     if (avail.lte(0)) continue;
     const q = Decimal.min(avail, remaining);
@@ -312,6 +334,7 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     nativeCurrency: input.nativeCurrency
   };
   ctx.disposals.push(d);
+  compact(pool);
   return d;
 }
 
@@ -384,7 +407,9 @@ function applyCorporateAction(ctx: Ctx, ca: CorporateAction, atUtc: string) {
         l.qtyRemaining = l.qtyRemaining.times(ratio);
         l.qtyOriginal = l.qtyOriginal.times(ratio);
         l.adjustments.push(`${note}: rolled into new instrument; original acquisition date and cost base retained${ca.type === 'merger_rollover' ? ' (scrip-for-scrip rollover — confirm eligibility)' : ''}.`);
-        getPool(ctx, poolKey(ctx, l.instrumentId, l.group, l.accountId)).push(l);
+        const target = getPool(ctx, poolKey(ctx, l.instrumentId, l.group, l.accountId));
+        target.push(l);
+        target.sort(byTime);
       }
       if (ca.type === 'merger_rollover') ctx.issues.push({ instrumentId: ca.instrumentId, code: 'REVIEW_CORP_ACTION', message: `${note}: rollover relief assumed — confirm the choice and eligibility.` });
       return;
@@ -412,6 +437,7 @@ function applyCorporateAction(ctx: Ctx, ca: CorporateAction, atUtc: string) {
           adjustments: [`Created by ${note}; acquisition date inherited (demerger relief assumed — review).`]
         };
         addLot(ctx, child);
+        getPool(ctx, poolKey(ctx, child.instrumentId, child.group, child.accountId)).sort(byTime);
       }
       ctx.issues.push({ instrumentId: ca.instrumentId, code: 'REVIEW_CORP_ACTION', message: `${note}: demerger roll-over and apportionment percentage require review.` });
       return;
