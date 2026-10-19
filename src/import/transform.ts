@@ -443,6 +443,11 @@ export function prepareRows(rows: Record<string, string>[], ctx: PrepareContext)
             if (side === 'income') {
               // Income received in kind: the amount is its value in `currency`; tokens become a lot.
               p.kind = 'income';
+              if (!p.amount && p.valuationAud) {
+                p.amount = p.valuationAud;
+                p.currency = 'AUD';
+              }
+              if (!p.amount) errors.push('Income received in kind needs its market value (amount or AUD market value).');
             }
             if (side === 'send' || side === 'receive') {
               const own = get('ownTransfer');

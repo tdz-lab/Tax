@@ -15,6 +15,7 @@ export function validateTransaction(t: Partial<Transaction>): string[] {
     }
   }
   if (!t.timeZone || !isValidZone(t.timeZone)) e.push('A valid time zone is required.');
+  else if (isValidIsoDate(t.date) && !t.occurredAt) e.push('Date/time could not be interpreted in the selected time zone.');
   if (!t.currency || !/^[A-Z0-9.]{2,12}$/.test(t.currency)) e.push('Currency / asset code is required (e.g. AUD, USD, USDT).');
   if (t.settlementDate && !isValidIsoDate(t.settlementDate)) e.push('Settlement date is invalid.');
   if (t.taxEventDate && !isValidIsoDate(t.taxEventDate)) e.push('Tax event date is invalid.');

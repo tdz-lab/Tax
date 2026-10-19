@@ -109,8 +109,18 @@ export function normaliseTransaction(p: Partial<Transaction>, ref: RefData, sett
   let localDate = date;
   // If a time zone + wall-clock are supplied, the UTC instant is authoritative; the FY date is the taxpayer-local date.
   if (date && (p.date !== undefined || p.time !== undefined || p.timeZone !== undefined || !occurredAt)) {
-    occurredAt = localToUtc(date, time, tz);
-    localDate = localDateOf(occurredAt, settings.taxTimeZone);
+    try {
+      occurredAt = localToUtc(date, time, tz);
+      localDate = localDateOf(occurredAt, settings.taxTimeZone);
+    } catch {
+      occurredAt = ''; // invalid date/time/zone — reported by validation
+    }
+  }
+  let fy = 0;
+  try {
+    fy = fyOfLocalDate(p.taxEventDate ?? existing?.taxEventDate ?? localDate);
+  } catch {
+    /* reported by validation */
   }
   const t: Transaction = {
     id: p.id ?? existing?.id ?? newId('txn'),
@@ -120,7 +130,7 @@ export function normaliseTransaction(p: Partial<Transaction>, ref: RefData, sett
     time: time ? time : undefined,
     timeZone: tz,
     occurredAt,
-    fy: fyOfLocalDate(p.taxEventDate ?? existing?.taxEventDate ?? localDate),
+    fy,
     category: p.category ?? existing?.category ?? (p.kind === 'trade' || existing?.kind === 'trade' ? 'trading' : ''),
     taxClass: 'UNCLASSIFIED',
     taxClassSource: 'default',
