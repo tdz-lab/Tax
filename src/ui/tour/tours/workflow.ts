@@ -129,7 +129,7 @@ export const reconciliationTour: Tour = {
 - manual rates and prior-day rates used (info)` },
     { title: 'Review the records', target: 'button:review', body: 'Each line links to the records involved. Open them, fix them, and the line disappears.' },
     { title: 'Statement balances', target: 'tab:Statement balances', body: 'Enter a balance or holding from a statement to compare with your records.', tryIt: { hint: 'Click the “Statement balances” tab.', check: () => !!document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.includes('Statement balances') } },
-    { title: 'Add a statement balance', target: 'button:+ Add statement balance', body: `Choose **cash balance** (an account’s cash in a currency) or **holding quantity** (units of an instrument), the statement date and the figure.
+    { title: 'Add a statement balance', before: [{ click: 'tab:Statement balances' }], target: 'button:+ Add statement balance', body: `Choose **cash balance** (an account’s cash in a currency) or **holding quantity** (units of an instrument), the statement date and the figure.
 
 The table shows the recorded value at the end of that day and the **difference**. Mark it reconciled, or “difference explained” with a note.` },
     { title: 'Transfer matching', target: 'tab:Transfer matching', body: 'Suggests pairs of “Send” and “Receive” records of the same asset between different accounts — received amount equal or slightly less (network fee), within 72 hours. **Confirm match** marks both as own transfers (no disposal).', tryIt: { hint: 'Click the “Transfer matching” tab.', check: () => !!document.querySelector('[role="tab"][aria-selected="true"]')?.textContent?.includes('Transfer matching') } },
