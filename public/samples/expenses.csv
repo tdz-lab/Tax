@@ -1,0 +1,6 @@
+Date,Description,Category,Supplier,Amount,Currency,GST,Business Use %,Business,Reference
+05/08/2024,[DEMO] Professional association membership,memberships,Demo Institute,450.00,AUD,40.91,100,N,EXP-001
+12/09/2024,[DEMO] Charting software subscription,software,Demo Charts Inc,39.00,USD,0,100,Y,EXP-002
+20/10/2024,[DEMO] Tax agent fee,tax_agent,Demo Tax Agents,330.00,AUD,30.00,100,N,EXP-003
+02/11/2024,[DEMO] Mobile phone plan,business_operating,Demo Telco,66.00,AUD,6.00,40,Y,EXP-004
+15/01/2025,[DEMO] Donation to registered charity,donations,Demo Charity (DGR),100.00,AUD,0,100,N,EXP-005

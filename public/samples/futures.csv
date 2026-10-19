@@ -1,0 +1,3 @@
+Date,Time,Time Zone,Type,Symbol,Contract,Asset Class,Exchange,Quantity,Price,Multiplier,Commission,Exchange Fees,Currency,Reference
+10/02/2025,9:31 AM,America/Chicago,Buy,DEMOES,Demo Index Future Mar25,future,CME,2,5000.00,50,4.50,2.40,USD,FUT-001
+11/02/2025,10:15 AM,America/Chicago,Sell,DEMOES,Demo Index Future Mar25,future,CME,2,5012.50,50,4.50,2.40,USD,FUT-002

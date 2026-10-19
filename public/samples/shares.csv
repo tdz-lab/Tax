@@ -1,0 +1,6 @@
+Trade Date,Time,Time Zone,Type,Symbol,Security Name,Asset Class,Exchange,Quantity,Price,Brokerage,Currency,Reference
+10/05/2023,10:15 AM,Australia/Sydney,Buy,DEMOA,Demo Australian Miner Ltd,au_share,ASX,200,25.00,19.95,AUD,SH-001
+15/02/2024,11:30 AM,Australia/Sydney,Buy,DEMOA,Demo Australian Miner Ltd,au_share,ASX,100,28.00,19.95,AUD,SH-002
+20/08/2024,2:05 PM,Australia/Sydney,Sell,DEMOA,Demo Australian Miner Ltd,au_share,ASX,250,31.50,19.95,AUD,SH-003
+03/06/2024,9:45 AM,America/New_York,Buy,DEMOU,Demo US Tech Inc,us_share,NASDAQ,50,180.00,1.00,USD,SH-004
+06/03/2025,3:30 PM,America/New_York,Sell,DEMOU,Demo US Tech Inc,us_share,NASDAQ,20,210.00,1.00,USD,SH-005

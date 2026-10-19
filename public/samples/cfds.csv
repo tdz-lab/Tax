@@ -1,0 +1,4 @@
+Date,Type,Symbol,Asset Class,Quantity,Price,Commission,Currency,Amount,Reference
+12/03/2025,Buy,DEMOIDX,cfd,10,7800.0,5.00,AUD,,CFD-001
+14/03/2025,Sell,DEMOIDX,cfd,10,7765.0,5.00,AUD,,CFD-002
+13/03/2025,Financing,DEMOIDX,cfd,,,,AUD,-6.40,CFD-003

@@ -1,0 +1,6 @@
+Date,Description,Category,Payer,Amount,Currency,Tax Withheld,Reference
+31/07/2024,[DEMO] Salary July,salary,Demo Employer Pty Ltd,7500.00,AUD,1650.00,PAY-2407
+31/08/2024,[DEMO] Salary August,salary,Demo Employer Pty Ltd,7500.00,AUD,1650.00,PAY-2408
+30/09/2024,[DEMO] Salary September,salary,Demo Employer Pty Ltd,7500.00,AUD,1650.00,PAY-2409
+30/09/2024,[DEMO] Savings interest Q1,interest,Demo Bank,85.40,AUD,0,INT-2409
+15/12/2024,[DEMO] Consulting invoice 001,business,Demo Client Co,3300.00,AUD,0,INV-001

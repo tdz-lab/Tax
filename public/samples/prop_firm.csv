@@ -1,0 +1,5 @@
+Date,Type,Description,Firm,Amount,Currency,Reference
+02/08/2024,Evaluation fee,[DEMO] 50K challenge,Demo Prop Firm LLC,165.00,USD,PF-001
+02/10/2024,Reset fee,[DEMO] Challenge reset,Demo Prop Firm LLC,85.00,USD,PF-002
+15/12/2024,Payout,[DEMO] Funded account payout (80% split),Demo Prop Firm LLC,2400.00,USD,PF-003
+15/12/2024,Refund,[DEMO] Evaluation fee refund with first payout,Demo Prop Firm LLC,165.00,USD,PF-004

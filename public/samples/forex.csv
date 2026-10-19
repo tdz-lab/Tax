@@ -1,0 +1,4 @@
+Date,Time,Time Zone,Type,Symbol,Asset Class,Quantity,Price,Commission,Currency,Amount,Reference
+03/03/2025,9:00 AM,Australia/Sydney,Buy,EURUSD,forex,100000,1.0850,3.50,USD,,FX-001
+05/03/2025,4:00 PM,Australia/Sydney,Sell,EURUSD,forex,100000,1.0900,3.50,USD,,FX-002
+05/03/2025,11:59 PM,Australia/Sydney,Financing,EURUSD,forex,,,,USD,-4.10,FX-003
