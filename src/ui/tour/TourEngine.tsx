@@ -69,6 +69,13 @@ async function runAction(a: TourAction): Promise<void> {
   } else if ('closeDialogs' in a) {
     closeDialogs();
     await sleep(150);
+  } else if ('ensureDialog' in a) {
+    if (!document.querySelector(APP_DIALOG)) {
+      const el = await waitFor(() => resolveTarget(a.ensureDialog));
+      el?.click();
+      await waitFor(() => document.querySelector(APP_DIALOG), 2000);
+      await sleep(150);
+    }
   } else if ('wait' in a) {
     await sleep(a.wait);
   } else if ('click' in a) {
@@ -242,8 +249,11 @@ function TourOverlay({ running, onStep, onExit, onTourDone }: { running: Running
   const tour = tourById(running.queue[running.qi]) as Tour;
   const step: TourStep = tour.steps[running.step];
   const [rect, setRect] = useState<DOMRect | null>(null);
-  const [status, setStatus] = useState<'none' | 'pending' | 'found' | 'missing'>('pending');
-  const [ready, setReady] = useState(false);
+  const stepKey = `${tour.id}:${running.step}`;
+  const [statusFor, setStatusFor] = useState<{ key: string; status: 'none' | 'pending' | 'found' | 'missing' }>({ key: '', status: 'pending' });
+  const [readyFor, setReadyFor] = useState<string | null>(null);
+  const status = statusFor.key === stepKey ? statusFor.status : 'pending';
+  const ready = readyFor === stepKey;
   const [done, setDone] = useState(false);
   const [skipped, setSkipped] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -264,11 +274,11 @@ function TourOverlay({ running, onStep, onExit, onTourDone }: { running: Running
   // Prepare the step: navigate, run actions, locate the target.
   useEffect(() => {
     let alive = true;
-    setReady(false);
+    const key = `${tour.id}:${running.step}`;
     setDone(false);
     setSkipped(false);
     setRect(null);
-    setStatus(step.target ? 'pending' : 'none');
+    setStatusFor({ key, status: step.target ? 'pending' : 'none' });
     (async () => {
       if (step.route) await runAction({ route: step.route });
       for (const a of step.before ?? []) {
@@ -281,10 +291,10 @@ function TourOverlay({ running, onStep, onExit, onTourDone }: { running: Running
         if (!alive) return;
         if (el) {
           el.scrollIntoView({ block: 'center', inline: 'nearest' });
-          setStatus('found');
-        } else setStatus('missing');
+          setStatusFor({ key, status: 'found' });
+        } else setStatusFor({ key, status: 'missing' });
       }
-      setReady(true);
+      setReadyFor(key);
     })();
     return () => {
       alive = false;

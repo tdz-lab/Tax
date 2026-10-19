@@ -33,7 +33,7 @@ export const incomeTour: Tour = {
   steps: [
     { title: 'The income list', route: '/tax?tab=income', target: 'tab:Income', body: 'All income records for the selected year — whether entered here, imported, or recorded in the Trading workspace (e.g. dividends, staking rewards, prop-firm payouts).' },
     { title: 'Add income', target: 'button:+ New record', body: 'New records from this tab start as **Income**.', tryIt: tryOpenDialog('Click “+ New record”.') },
-    { title: 'Choose the right category', target: 'label:Category', body: `The category sets the default tax classification:
+    { before: [{ ensureDialog: 'button:+ New record' }], title: 'Choose the right category', target: 'label:Category', body: `The category sets the default tax classification:
 - **Salary and wages**, **Allowances and bonuses**, **Government payments**
 - **Interest income**, **Australian dividends**, **Managed-fund / ETF distributions**
 - **Foreign dividends / interest / other foreign income**
@@ -70,7 +70,7 @@ export const expensesTour: Tour = {
 
 Deductibility always depends on your circumstances — receipts and a clear work/business connection are needed.` },
     { title: 'New expense', target: 'button:+ New record', body: 'New records from this tab start as **Expense**.', tryIt: tryOpenDialog('Click “+ New record”.') },
-    { title: 'Business / work-use percentage', target: 'label:Business / work-use %', body: 'Enter the share used for work or business (e.g. 40% of a phone plan). Only that share is counted; the private share is excluded.' },
+    { before: [{ ensureDialog: 'button:+ New record' }], title: 'Business / work-use percentage', target: 'label:Business / work-use %', body: 'Enter the share used for work or business (e.g. 40% of a phone plan). Only that share is counted; the private share is excluded.' },
     { title: 'Business (sole trader) expense', target: 'label:Business (sole trader) expense', body: 'Tick for sole-trader costs. They then appear in the business profit and loss, and GST credits are excluded from the deduction when you are GST-registered.' },
     { title: 'GST', target: 'label:GST treatment', body: `GST is never assumed — set it per record:
 - **Taxable (includes GST)** — enter the GST amount (the 1/11 helper fills it)
@@ -111,7 +111,7 @@ export const assetsTour: Tour = {
   steps: [
     { title: 'Asset register', route: '/tax?tab=assets', target: 'tab:Assets & depreciation', body: 'Record equipment, computers, vehicles and other depreciating assets. The table shows this year’s opening value, decline in value, deductible amount and closing value.' },
     { title: 'Add an asset', target: 'button:+ Add asset', body: 'Opens the asset form.', tryIt: tryOpenDialog('Click “+ Add asset”.') },
-    { title: 'Cost and dates', target: 'label:Cost (AUD, excl. claimable GST)', body: 'Enter the cost (excluding GST you can claim back), the date acquired and — if later — the date first used or installed ready for use (depreciation starts then).' },
+    { before: [{ ensureDialog: 'button:+ Add asset' }], title: 'Cost and dates', target: 'label:Cost (AUD, excl. claimable GST)', body: 'Enter the cost (excluding GST you can claim back), the date acquired and — if later — the date first used or installed ready for use (depreciation starts then).' },
     { title: 'Depreciation method', target: 'label:Method', body: `- **Prime cost** — same amount each year: cost × days/365 × 100% ÷ effective life
 - **Diminishing value** — larger early: value × days/365 × 200% ÷ effective life
 - **Instant asset write-off** — whole cost in the first year if eligible (threshold and eligibility flagged)

@@ -48,7 +48,7 @@ export const tradingAccountsTour: Tour = {
   steps: [
     { title: 'Accounts', route: '/trading?tab=accounts', target: 'tab:Accounts', body: 'One account per broker, exchange, wallet, futures/forex/CFD/options account, prop-firm account and bank account you use.' },
     { title: 'Add an account', target: 'button:+ Add account', body: 'Opens the account form.', tryIt: tryOpenDialog('Click “+ Add account”.') },
-    { title: 'Name and type', target: 'label:Account type', body: `Types: Australian share broker, US share broker, international broker, crypto exchange, crypto wallet (self-custody), futures, forex, CFD, options, prop-firm evaluation, prop-firm funded, bank, cash/other.
+    { before: [{ ensureDialog: 'button:+ Add account' }], title: 'Name and type', target: 'label:Account type', body: `Types: Australian share broker, US share broker, international broker, crypto exchange, crypto wallet (self-custody), futures, forex, CFD, options, prop-firm evaluation, prop-firm funded, bank, cash/other.
 
 The type sets sensible defaults (e.g. imports into a US broker account assume US shares).` },
     { title: 'Institution and identifier', target: 'label:Account identifier (masked)', body: 'The broker/exchange/bank name, and optionally a **masked** identifier such as the last four digits. Never store passwords, API keys or seed phrases.' },
@@ -82,7 +82,7 @@ export const instrumentsTour: Tour = {
   steps: [
     { title: 'Instruments', route: '/trading?tab=instruments', target: 'tab:Instruments', body: 'Every share, ETF, coin, token, contract or option you trade is an instrument. Imports create instruments automatically; you can add or correct them here.' },
     { title: 'Add an instrument', target: 'button:+ Add instrument', body: 'Opens the instrument form.', tryIt: tryOpenDialog('Click “+ Add instrument”.') },
-    { title: 'Symbol and name', target: 'label:Symbol', body: 'Use the ticker the broker uses (e.g. BHP, AAPL, BTC, ESZ5). Name, exchange/market, country and ISIN are optional.' },
+    { before: [{ ensureDialog: 'button:+ Add instrument' }], title: 'Symbol and name', target: 'label:Symbol', body: 'Use the ticker the broker uses (e.g. BHP, AAPL, BTC, ESZ5). Name, exchange/market, country and ISIN are optional.' },
     { title: 'Asset class', target: 'label:Asset class', body: `Decides how the engines treat it:
 - **Shares, ETFs, managed funds, bonds, crypto, stablecoins, NFTs, bought options** → acquisition parcels and CGT (or revenue, per account)
 - **Futures, CFDs, forex positions** → opened/closed positions with profit and loss
@@ -106,7 +106,7 @@ export const recordSharesTour: Tour = {
   needsData: true,
   steps: [
     { title: 'Manual entry or import', route: '/trading', target: 'button:+ New record', body: 'Most people import trades from broker CSVs (see the Imports tutorial). Here you will learn every field by entering one manually — useful for corrections and small accounts.', tryIt: tryOpenDialog('Click “+ New record”.') },
-    { title: 'Record type: Trade', target: 'label:Record type', body: 'Trades start with the **Trade** type and the **Buy** side.', before: [{ select: ['label:Record type', 'trade'] }] },
+    { title: 'Record type: Trade', target: 'label:Record type', body: 'Trades start with the **Trade** type and the **Buy** side.', before: [{ ensureDialog: 'button:+ New record' }, { select: ['label:Record type', 'trade'] }] },
     { title: 'Account', target: 'label:Account', body: 'Choose the broker account. Its **tax treatment** decides whether this trade is a capital (CGT) or revenue item.', tryIt: tryValue('Choose an account (e.g. DEMO AU Broker).', 'label:Account', (v) => !!v) },
     { title: 'Side / event', target: 'label:Side / event', body: `- **Buy** / **Sell** — normal purchases and sales
 - **Sell short / write** and **Buy to cover / close** — short positions and written options
@@ -152,7 +152,7 @@ export const cryptoTour: Tour = {
 - **Moving between your own wallets** — not a disposal (but a fee paid in coins is)
 - **Staking rewards** — income when received; the coins then have that value as cost base` },
     { title: 'Start a crypto record', target: 'button:+ New record', body: 'Open the editor.', tryIt: tryOpenDialog('Click “+ New record”.') },
-    { title: 'Buying with AUD', before: [{ select: ['label:Record type', 'trade'] }], target: 'label:Currency / asset', body: 'A normal **Buy** with currency AUD: quantity of coins, price per coin, exchange fee. The cost base is price × quantity + fee.' },
+    { title: 'Buying with AUD', before: [{ ensureDialog: 'button:+ New record' }, { select: ['label:Record type', 'trade'] }], target: 'label:Currency / asset', body: 'A normal **Buy** with currency AUD: quantity of coins, price per coin, exchange fee. The cost base is price × quantity + fee.' },
     { title: 'Buying with a stablecoin (e.g. BTC/USDT)', target: 'label:Currency / asset', body: `If you paid in USDT, set the currency to **USDT**. The app then records **two** events:
 - a disposal of the USDT you spent, at its AUD value
 - the acquisition of the coin you bought, at the same AUD value
@@ -296,7 +296,7 @@ export const corporateActionsTour: Tour = {
   steps: [
     { title: 'Corporate actions', route: '/trading?tab=corporate', target: 'tab:Corporate actions', body: 'Company events that change your holdings or cost base without you trading. Record them here and the parcel engine applies them on the effective date.' },
     { title: 'Add one', target: 'button:+ Add corporate action', body: 'Opens the form.', tryIt: tryOpenDialog('Click “+ Add corporate action”.') },
-    { title: 'Type', target: 'label:Type', body: `- **Split / reverse split / bonus** — units × new ÷ old; total cost base and dates unchanged
+    { before: [{ ensureDialog: 'button:+ Add corporate action' }], title: 'Type', target: 'label:Type', body: `- **Split / reverse split / bonus** — units × new ÷ old; total cost base and dates unchanged
 - **Merger rollover** — shares exchanged for shares of another company with scrip-for-scrip rollover: parcels move to the new company, keeping original dates and cost base (eligibility flagged)
 - **Spin-off** — part of the cost base moves to new shares (enter the %), acquisition dates inherited (demerger relief, flagged)
 - **Return of capital** — cost base reduced by the cash per unit; any excess is a capital gain (G1)

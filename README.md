@@ -53,6 +53,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 | **Tax calculations** | Recorded totals, calculated amounts, estimates, items awaiting review and readiness kept separate; traceability to records; rule-set version and warnings; immutable calculation snapshots with history. |
 | **Reports** | Report A (basic annual summary) and Report B (33-section tax-agent report) as PDF, generated offline; CSV exports; print view; report snapshots with SHA-256. |
 | **Reconciliation** | Data-quality summary, statement balance and holding checks, own-transfer matching, duplicate review, unresolved classifications. |
+| **Interactive tutorials** | 30 guided tutorials (≈325 steps) that move through the real app, spotlight each button, field and table, explain it, and wait for you on “Your turn” steps. Detailed coverage of trading (accounts & tax treatment, instruments, shares, crypto, derivatives & options, parcels/lots, performance, prop firms, corporate actions) and currencies (conversion methodology, importing rates, manual rates & overrides, markets/time zones/FY boundaries). Optional practice data, progress tracking, a complete course, and cleanup of practice records. |
 | **Data management** | Automatic saving, crash-recoverable drafts, undo for deletes, audit history, full backups (optionally encrypted), restore (replace or merge), integrity checks, demonstration data. |
 
 ## 2. What it does not do
@@ -86,7 +87,9 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
    * Or, in a terminal inside the folder: `node scripts/serve.mjs`
 4. Your browser opens <http://localhost:4173>. If it doesn’t, open that address yourself. Keep the small
    terminal window open while you use the application.
-5. On the welcome screen, either load the **demonstration data** (fictional, clearly marked, removable) to explore,
+5. **New to the app?** Click **Take the 4-minute guided tour** on the welcome screen, or open **Tutorials** in the menu
+   (every section also has a **? Tutorial** button at the top right).
+6. On the welcome screen, either load the **demonstration data** (fictional, clearly marked, removable) to explore,
    or start with your own records:
    1. *Tax & Business → Tax profile*: record your residency for the year.
    2. *Trading & Investments → Accounts*: add each broker/exchange/wallet/prop-firm/bank account and choose its tax
@@ -98,6 +101,14 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 
 The pre-built application is in `dist/`. If it is missing (e.g. you deleted it), the start scripts run
 `npm install` and `npm run build` once (this needs an internet connection).
+
+### Tutorials
+
+*Tutorials* (menu) lists every tutorial by section with its length, whether it uses practice data, and your
+progress. Choose **Quick start**, any single tutorial, **Run all in this section**, or the **Complete course** (all
+30 in a sensible order). During a tutorial use **Next / Back**; **Your turn** steps unlock *Next* once you have
+done the action (or press **Skip**); **Exit tutorial** stops at any time. When a tutorial finishes you can delete
+any practice records you created and remove the practice (DEMO) data.
 
 ## 5. Offline use and installing as an app
 
@@ -261,9 +272,9 @@ Summarised in §2; full, explicit list in [docs/KNOWN_LIMITATIONS.md](docs/KNOWN
 npm install
 npm run typecheck      # TypeScript (strict)
 npm run lint           # ESLint
-npm test               # 103 unit/integration tests (Vitest, fake IndexedDB)
+npm test               # unit/integration tests (Vitest, fake IndexedDB)
 npm run build          # production build + service worker
-npm run test:e2e       # 3 browser tests (Playwright/Chromium) incl. offline, backup/restore, PDFs
+npm run test:e2e       # browser tests (Playwright/Chromium): offline, backup/restore, PDFs, every tutorial step
 npm run verify         # all of the above
 ```
 
@@ -311,7 +322,7 @@ rollback). No connector is active in this build. How to add one: [docs/CONNECTOR
 │   ├── backup/               backup/restore + WebCrypto encryption
 │   ├── reports/              PDF (basic/full), CSV, report data gathering
 │   ├── connectors/           future connector framework (inactive)
-│   └── ui/                   React app: shell, components, pages
+│   └── ui/                   React app: shell, components, pages, tour/ (tutorial engine + 30 tutorials)
 └── tests/
     ├── unit/                 Vitest suites (engines, persistence, imports, backup, reports, UI, performance)
     └── e2e/                  Playwright browser workflows (offline, full workflow, navigation)

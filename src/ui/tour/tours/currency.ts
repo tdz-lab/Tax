@@ -35,7 +35,7 @@ A US trade at 3:30 PM on 6 March New York is 7 March in Sydney — these options
 
 Both describe the same thing. The app stores the rate exactly as quoted, plus the derived “AUD per 1 unit”, so the direction is never ambiguous. The “Meaning” column spells it out.` },
     { title: 'Seeing the conversion on a record', before: [{ route: '/transactions' }, { select: ['[aria-label="Currency filter"]', 'USD'] }], target: 'col:AUD', body: 'Here are USD records. Each AUD figure comes from that record’s own historical rate. Click a record to open it.', tryIt: tryOpenDialog('Click any USD record.') },
-    { title: 'The conversion panel', target: 'panel:Historical AUD conversion', body: `- **AUD per 1 USD** — the multiplier used
+    { before: [{ ensureDialog: 'css:table.dt tbody tr.clickable td' }], title: 'The conversion panel', target: 'panel:Historical AUD conversion', body: `- **AUD per 1 USD** — the multiplier used
 - **Rate as quoted** — e.g. “0.63 (USD per 1 AUD)”
 - **Rate date** — and “prior day −N” if a weekend look-back was used
 - **Type / source** — daily reference, execution, manual or cross, and who published it
@@ -100,12 +100,12 @@ export const ratesManualTour: Tour = {
 
 Both require a **source**; overrides also need a **reason**.` },
     { title: 'Add a rate manually', route: '/settings?tab=rates', target: 'button:+ Add rate manually', body: 'Opens the rate form.', tryIt: tryOpenDialog('Click “+ Add rate manually”.') },
-    { title: 'Base, quote and rate', target: 'label:Base', body: '1 **Base** = **Rate** × **Quote**. For an RBA-style USD rate: Base AUD, Quote USD, Rate 0.6543. For a price: Base USD, Quote AUD, Rate 1.5283.' },
+    { before: [{ ensureDialog: 'button:+ Add rate manually' }], title: 'Base, quote and rate', target: 'label:Base', body: '1 **Base** = **Rate** × **Quote**. For an RBA-style USD rate: Base AUD, Quote USD, Rate 0.6543. For a price: Base USD, Quote AUD, Rate 1.5283.' },
     { title: 'Date and type', target: 'label:Type', body: '**manual** for a rate you looked up, **daily reference** for an official daily rate, **execution** or **intraday** (time-specific), **price** for crypto.' },
     { title: 'Source is required', target: 'label:Source (required)', body: 'Where the rate comes from — e.g. “RBA F11 table”, “CommSec contract note 123456”. It appears on every record that uses the rate and in the full report’s rate-source list.' },
     { title: 'Saving', target: 'button:Save rate', body: 'Saving re-checks all records and tells you how many were updated. Close this form without saving if you are just practising.' },
     { title: 'Override one record’s rate', before: [{ closeDialogs: true }, { route: '/transactions' }, { select: ['[aria-label="Currency filter"]', 'USD'] }], target: 'col:AUD', body: 'Open a USD record to see its conversion panel.', tryIt: tryOpenDialog('Click a USD record.') },
-    { title: 'Override rate', target: 'button:Override rate', body: 'Opens the override form on this record (or “Enter rate manually” when the rate is missing).', tryIt: tryVisible('Click “Override rate”.', 'label:Reason') },
+    { before: [{ ensureDialog: 'css:table.dt tbody tr.clickable td' }], title: 'Override rate', target: 'button:Override rate', body: 'Opens the override form on this record (or “Enter rate manually” when the rate is missing).', tryIt: tryVisible('Click “Override rate”.', 'label:Reason') },
     { title: 'Rate, direction, source, reason', target: 'label:Reason', body: `- **Rate** and **Direction** (USD per 1 AUD, or AUD per 1 USD)
 - **Source** — e.g. “Broker contract note”
 - **Reason** — e.g. “Broker applied its own conversion rate”

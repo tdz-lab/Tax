@@ -10,7 +10,7 @@ const ALLOWED_MISSING = new Set<string>([
   'transactions:19', // conversion/documents panels of a saved record
   'trading-shares:13', // conversion panel of a saved record
   'expenses:8', // supporting documents of a saved record
-  'imports:4', 'imports:5', 'imports:6', 'imports:7', 'imports:8', 'imports:11', 'imports:12', // mapping step needs a chosen file
+  'imports:4', 'imports:5', 'imports:6', 'imports:7', 'imports:8', 'imports:11', 'imports:12', // mapping/preview need a chosen file
   'currency-manual:9', // override form opens after clicking “Override rate”
 ]);
 

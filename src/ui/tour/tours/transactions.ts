@@ -31,7 +31,7 @@ Filters are remembered while you move around the app.` },
 Changing category or account re-works automatic classifications; choosing a classification fixes it.` },
     { title: 'Deleting and undo', body: 'Deleting moves records to a deleted state. A notice with **Undo** appears for a few seconds, and you can also restore later with **Show deleted**. Permanent removal happens only from Settings → Data health.' },
     { title: 'Create a record', target: 'button:+ New record', body: 'Opens the record editor.', tryIt: tryOpenDialog('Click “+ New record”.') },
-    { title: 'Record type', target: 'label:Record type', body: `First choose what you are recording:
+    { before: [{ ensureDialog: 'button:+ New record' }], title: 'Record type', target: 'label:Record type', body: `First choose what you are recording:
 - **Income**, **Expense**, **Fee**
 - **Trade** (buy, sell, swap, futures, options, CFDs, P&L statements, financing…)
 - **Transfer** (between your own accounts/wallets)

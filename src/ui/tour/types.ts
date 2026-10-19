@@ -16,6 +16,8 @@ export type TourAction =
   | { select: [Target, string] }
   | { fill: [Target, string] }
   | { closeDialogs: true }
+  /** Click the target only if no dialog is open (keeps later steps working when the user skipped opening it). */
+  | { ensureDialog: Target }
   | { wait: number };
 
 export interface TryIt {
