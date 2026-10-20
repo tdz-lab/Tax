@@ -37,9 +37,9 @@ export function resolveTarget(t: Target): HTMLElement | null {
     const d = [...document.querySelectorAll<HTMLElement>(APP_DIALOG)].filter(visible);
     return d[d.length - 1] ?? null;
   }
-  const i = t.indexOf(':');
-  const kind = i > 0 && !t.startsWith('[') && !t.startsWith('.') && !t.startsWith('#') ? t.slice(0, i) : 'css';
-  const arg = kind === 'css' ? t : t.slice(i + 1);
+  const m = /^(nav|tab|button|label|panel|stat|col|text|css):/.exec(t);
+  const kind = m ? m[1] : 'css';
+  const arg = m ? t.slice(m[0].length) : t;
   for (const root of scopes()) {
     let el: HTMLElement | null = null;
     switch (kind) {
