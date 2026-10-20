@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Dexie from 'dexie';
 import { AppDB, SCHEMA_V1, setDb } from '../../src/db/schema';
-import { saveTransaction, softDeleteTransactions, restoreTransactions, overrideRate, clearRateOverride, refreshAllConversions, ValidationError, saveEntity, bulkUpdateTransactions, reclassifyAll } from '../../src/services/ledger';
+import { saveTransaction, softDeleteTransactions, restoreTransactions, overrideRate, clearRateOverride, refreshAllConversions, ValidationError, saveEntity, bulkUpdateTransactions, reclassifyAll, deleteEntity, removeAccount, accountRecordCounts } from '../../src/services/ledger';
 import { saveSettings, loadSettings } from '../../src/services/settings';
 import { dropDb, freshDb } from './dbHelpers';
 import { D } from '../../src/lib/decimal';
@@ -134,5 +134,33 @@ describe('database migrations', () => {
     expect(await v2.audit.filter((a) => a.action === 'migrate').count()).toBe(1);
     v2.close();
     await Dexie.delete(name);
+  });
+});
+
+describe('deleting accounts never orphans records', () => {
+  const src = (id: string) => acct({ id, name: 'CPA network', type: 'income_source', taxTreatment: 'not_applicable' });
+  it('an account without records is deleted completely', async () => {
+    await saveEntity('accounts', src('a1'));
+    expect(await removeAccount('a1', 'delete_records')).toBe('deleted');
+    expect(await db.accounts.get('a1')).toBeUndefined();
+  });
+  it('"hide" keeps the records counting; "delete with records" moves them to Deleted and they can be restored', async () => {
+    await saveEntity('accounts', src('a2'));
+    const t1 = await saveTransaction({ kind: 'income', date: '2024-08-01', description: 'Payout', category: 'business', amount: '100', currency: 'AUD', accountId: 'a2' });
+    const t2 = await saveTransaction({ kind: 'income', date: '2025-08-01', description: 'Payout 2', category: 'business', amount: '50', currency: 'AUD', accountId: 'a2' });
+    expect(await removeAccount('a2', 'hide')).toBe('hidden');
+    expect((await db.accounts.get('a2'))!.archived).toBe(true);
+    expect((await db.transactions.get(t1.id))!.status).toBe('active');
+    expect(await removeAccount('a2', 'delete_records')).toBe('hidden');
+    expect(await accountRecordCounts('a2')).toEqual({ active: 0, deleted: 2 });
+    expect(await db.accounts.get('a2')).toBeDefined(); // kept (hidden) so restored records still have their account
+    await restoreTransactions([t1.id, t2.id]);
+    expect((await db.transactions.get(t2.id))!.accountId).toBe('a2');
+  });
+  it('the generic delete refuses an account that still has records', async () => {
+    await saveEntity('accounts', src('a3'));
+    await saveTransaction({ kind: 'income', date: '2024-08-01', description: 'Payout', category: 'business', amount: '100', currency: 'AUD', accountId: 'a3' });
+    await expect(deleteEntity('accounts', 'a3')).rejects.toThrow(/has 1 record/);
+    expect(await db.accounts.get('a3')).toBeDefined();
   });
 });

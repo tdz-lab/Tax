@@ -1,7 +1,7 @@
 {
   "name": "au-tax-trading-ledger",
   "private": true,
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "Local-first Australian tax preparation and multi-market trading record application (offline PWA).",
   "type": "module",
   "license": "UNLICENSED",

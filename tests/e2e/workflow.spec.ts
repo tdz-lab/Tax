@@ -375,3 +375,49 @@ test('year selector follows the current year by default and can be pinned', asyn
   await page.reload();
   await expect(page.getByLabel('Selected financial year')).toHaveValue('auto');
 });
+
+test('delete money accounts: empty account deleted, account with records hidden or deleted with its records', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('./');
+  await selectFY(page, '2025');
+  await page.goto('./#/money');
+  const add = async (name: string) => {
+    await page.getByRole('button', { name: '+ Add account' }).click();
+    const d = page.getByRole('dialog');
+    await d.getByLabel('Name (anything you like)').fill(name);
+    await d.getByRole('button', { name: 'Add account' }).click();
+    await expect(d).toHaveCount(0);
+  };
+  await add('Empty network');
+  await add('Busy network');
+  await page.getByRole('row', { name: /Busy network/ }).getByRole('button', { name: '+ In' }).click();
+  const q = page.getByRole('dialog');
+  await q.getByLabel('Date').fill('2024-10-01');
+  await q.getByLabel('Amount').fill('300');
+  await q.getByLabel('Description').fill('Busy payout');
+  if (!(await q.getByLabel('What is it?').inputValue())) await q.getByLabel('What is it?').selectOption({ index: 1 });
+  await q.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Busy payout' })).toBeVisible();
+
+  // No records: deleted completely.
+  await page.getByRole('button', { name: 'Edit Empty network' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete…' }).click();
+  await expect(page.getByText('This account has no records')).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete account' }).click();
+  await expect(page.getByRole('button', { name: 'Edit Empty network' })).toHaveCount(0);
+
+  // With records: hide keeps the record; show again; then delete with records removes it from the year.
+  await page.getByRole('button', { name: 'Edit Busy network' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Hide the account/ }).click();
+  await expect(page.getByRole('button', { name: 'Edit Busy network' })).toHaveCount(0);
+  await expect(page.getByRole('cell', { name: 'Busy payout' })).toBeVisible();
+  await page.getByText('Hidden accounts (1)').click();
+  await page.getByRole('button', { name: 'Show again' }).click();
+  await page.getByRole('button', { name: 'Edit Busy network' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Delete the account and its 1 record/ }).click();
+  await expect(page.getByRole('cell', { name: 'Busy payout' })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

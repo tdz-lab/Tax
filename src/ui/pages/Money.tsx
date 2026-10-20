@@ -11,7 +11,7 @@ import { D, Decimal, formatMoney } from '../../lib/decimal';
 import { fyLabel, fyLongLabel, fyEnd, fyStart, nowIso } from '../../lib/dates';
 import { newId } from '../../lib/ids';
 import { audOf } from '../../engines/ledger';
-import { reclassifyAll, saveEntity, saveTransaction } from '../../services/ledger';
+import { accountRecordCounts, reclassifyAll, removeAccount, saveEntity, saveTransaction } from '../../services/ledger';
 import { useApp } from '../AppContext';
 import { useAccounts, useCategories } from '../hooks';
 import { DecimalInput, Modal, Select, TextInput } from '../components/ui';
@@ -33,8 +33,71 @@ const isTradingType = (t: AccountType) => !['bank', 'cash', 'income_source', 'pa
 
 const audAmount = (t: Transaction) => audOf(t, t.amount);
 
+/** Delete an account: removed outright when it has no records, otherwise hidden or deleted together with its records. */
+function DeleteAccountModal({ account, onBack, onDone }: { account: Account; onBack: () => void; onDone: () => void }) {
+  const { run } = useApp();
+  const counts = useLiveQuery(() => accountRecordCounts(account.id), [account.id]);
+  const go = async (mode: 'hide' | 'delete_records') => {
+    const n = counts?.active ?? 0;
+    const ok = await run(() => removeAccount(account.id, mode), {
+      success: !counts || counts.active + counts.deleted === 0 ? `Account “${account.name}” deleted.` : mode === 'hide' ? `“${account.name}” hidden — its records still count. Show it again under Hidden accounts.` : `“${account.name}” and its ${n} record${n === 1 ? '' : 's'} deleted. Records can be restored from All transactions → Show deleted.`
+    });
+    if (ok !== undefined) onDone();
+  };
+  if (counts === undefined) return null;
+  const total = counts.active + counts.deleted;
+  return (
+    <Modal
+      title={`Delete “${account.name}”?`}
+      onClose={onBack}
+      footer={
+        <>
+          <button onClick={onBack}>Back</button>
+          {total === 0 && (
+            <button className="danger" onClick={() => go('delete_records')}>
+              Delete account
+            </button>
+          )}
+        </>
+      }
+    >
+      {total === 0 ? (
+        <p>This account has no records, so it can be deleted completely.</p>
+      ) : counts.active === 0 ? (
+        <>
+          <p>This account’s records are already deleted ({counts.deleted}), so it will be hidden. It disappears from your lists; it is kept only so those records can be restored.</p>
+          <div className="row">
+            <button className="danger" onClick={() => go('hide')}>
+              Delete account
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <p>
+            “{account.name}” has <b>{counts.active} record{counts.active === 1 ? '' : 's'}</b> (all years). What would you like to do?
+          </p>
+          <div className="choice-cards">
+            <button type="button" className="choice-card" onClick={() => go('hide')}>
+              <b>Hide the account</b>
+              <span>It disappears from your lists, but its records stay and still count in your tax figures. You can show it again later.</span>
+            </button>
+            <button type="button" className="choice-card" style={{ borderColor: 'var(--bad)' }} onClick={() => go('delete_records')}>
+              <b style={{ color: 'var(--bad)' }}>
+                Delete the account and its {counts.active} record{counts.active === 1 ? '' : 's'}
+              </b>
+              <span>The records stop counting and move to Deleted — you can restore them from All transactions → Show deleted until you purge them.</span>
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 export function AccountModal({ initial, onClose, defaultType = 'income_source' }: { initial?: Account; onClose: (saved?: Account) => void; defaultType?: AccountType }) {
   const { run, settings } = useApp();
+  const [deleting, setDeleting] = useState(false);
   const isNew = !initial;
   const [a, setA] = useState<Partial<Account>>(initial ?? { id: newId('acc'), type: defaultType, currency: settings.defaultCurrency || 'AUD', taxTreatment: isTradingType(defaultType) ? 'unresolved' : 'not_applicable', propStatus: 'none', createdAt: nowIso() });
   const trading = isTradingType(a.type as AccountType);
@@ -48,12 +111,18 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
     }, { success: isNew ? `Account “${rec.name}” added.` : 'Account saved.' });
     if (out) onClose(out);
   };
+  if (deleting && initial) return <DeleteAccountModal account={initial} onBack={() => setDeleting(false)} onDone={() => onClose()} />;
   return (
     <Modal
       title={isNew ? 'Add an account' : `Edit ${initial!.name}`}
       onClose={() => onClose()}
       footer={
         <>
+          {!isNew && (
+            <button className="danger" style={{ marginRight: 'auto' }} onClick={() => setDeleting(true)}>
+              Delete…
+            </button>
+          )}
           <button onClick={() => onClose()}>Cancel</button>
           <button className="primary" disabled={!a.name?.trim()} onClick={save}>
             {isNew ? 'Add account' : 'Save & close'}
@@ -194,7 +263,7 @@ export function plRows(txns: Transaction[], catName: Map<string, string>) {
 const fm = (v: Decimal | null) => (v === null ? 'needs exchange rate' : formatMoney(v));
 
 export function Money() {
-  const { fy } = useApp();
+  const { fy, run } = useApp();
   const accounts = useAccounts();
   const categories = useCategories();
   const [quick, setQuick] = useState<{ dir: 'in' | 'out'; accountId?: string } | null>(null);
@@ -220,6 +289,7 @@ export function Money() {
     return m;
   }, [txns]);
   const moneyAccounts = accounts.filter((a) => !a.archived && (!isTradingType(a.type) || perAccount.has(a.id)));
+  const hiddenAccounts = accounts.filter((a) => a.archived);
   return (
     <div className="simple-page">
       <div className="page-head">
@@ -324,6 +394,28 @@ export function Money() {
                 )}
               </tbody>
             </table>
+            {hiddenAccounts.length > 0 && (
+              <details style={{ marginTop: 8 }}>
+                <summary className="muted">Hidden accounts ({hiddenAccounts.length})</summary>
+                <table className="pl-table">
+                  <tbody>
+                    {hiddenAccounts.map((a) => (
+                      <tr key={a.id}>
+                        <td>
+                          {a.name}
+                          <div className="faint" style={{ fontSize: 11 }}>{ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]}</div>
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="small" onClick={() => run(() => saveEntity('accounts', { ...a, archived: false, updatedAt: nowIso() }), { success: `“${a.name}” is shown again.` })}>
+                            Show again
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </details>
+            )}
           </div>
         </div>
       </div>

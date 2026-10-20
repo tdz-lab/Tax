@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.5.0.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.5.1.
 
 ## Commands and results
 
@@ -9,9 +9,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 | --- | --- | --- |
 | `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` (`vitest run`) | 205 unit/integration tests in 13 files | **205 passed, 0 failed** |
+| `npm test` (`vitest run`) | 208 unit/integration tests in 13 files | **208 passed, 0 failed** |
 | `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,812 KiB) | **Passed** |
-| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 9 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs and fetching rates) | **9 passed, 0 failed** |
+| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 10 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs, fetching rates and deleting accounts) | **10 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -24,6 +24,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 * Currency conversion direction (inversion of AUD-base quotes), direct quotes, cross rates via USD (and disabled),
   stablecoins never assumed = US$1, prior-day look-back recorded, missing rates flagged (never zero/today’s rate),
   execution-rate preference, manual overrides requiring source + reason, reciprocal precision, rate validation.
+* Deleting accounts never orphans records: no records → deleted; “hide” keeps records counting; “delete with
+  records” soft-deletes them and keeps the account hidden so restored records keep it; the generic delete refuses
+  an account that still has records.
 * Persistence: create/update idempotent by id, audit diffs, closing and reopening the database, validation errors,
   soft delete/undo, FX resolved on save and refreshed when rates arrive, manual override history and removal,
   overseas time-zone handling, re-classification on account-treatment change, bulk updates, settings.
@@ -155,6 +158,8 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
 3c. **Get exchange rates** — a USD record without a rate is listed; with a stand-in RBA response the panel shows
    what was found, saves 2 rates, the record is converted, and the fetch appears in import history; the local
    server’s rate relay answers.
+3e. **Deleting accounts** — an account without records is deleted; one with records can be hidden (its record
+   still shows and counts), shown again, then deleted together with its record (removed from the year).
 3d. **Year selector** — defaults to *Current year*; a picked year stays after reload; *Current year* can be chosen again.
 
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)
