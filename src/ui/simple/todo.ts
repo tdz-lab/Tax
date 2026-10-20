@@ -62,7 +62,7 @@ export function buildTodos(r: TaxYearResult | null, quality: QualityIssue[] | nu
   add('MISSING_COST_BASE', cost, { text: `${plural(cost, 'sale')} ${cost === 1 ? 'is' : 'are'} missing what you paid`, detail: 'Add the original purchase (or an opening balance) so the gain can be worked out.', severity: 'bad', fix: '/add-trades', fixLabel: 'Add purchase' });
 
   const rate = Math.max(n(byCode('MISSING_RATE')), n(q('MISSING_RATE')));
-  add('MISSING_RATE', rate, { text: `${plural(rate, 'foreign-currency record')} ${rate === 1 ? 'needs' : 'need'} an exchange rate`, detail: 'Import historical rates (e.g. from the RBA) so amounts can be converted to AUD.', severity: 'bad', fix: '/imports', fixLabel: 'Import rates' });
+  add('MISSING_RATE', rate, { text: `${plural(rate, 'foreign-currency record')} ${rate === 1 ? 'needs' : 'need'} an exchange rate`, detail: 'Fetch them (RBA for currencies, CoinGecko for crypto) or import a rate table so amounts can be converted to AUD.', severity: 'bad', fix: '/imports', fixLabel: 'Get rates' });
 
   const review = n(byCode('REVIEW_ITEMS'));
   add('REVIEW_ITEMS', review, { text: `${plural(review, 'item')} ${review === 1 ? 'needs' : 'need'} a decision`, detail: 'For example an airdrop, a prop-firm payout or an unusual expense.', severity: 'warn', fix: '/reconciliation?tab=unclassified', fixLabel: 'Review' });

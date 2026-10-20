@@ -8,7 +8,7 @@ stated restrictions; **Flagged** items are recorded and shown for review but not
 | Item | Notes |
 | --- | --- |
 | Live bank, broker, exchange, wallet, accounting or prop-firm connections | Framework only (`src/connectors`). No credentials are requested or stored; no network sync. Use CSV imports. |
-| Automatic exchange-rate / price download | Import published tables (e.g. RBA historical data) or enter rates with a source. |
+| Automatic (background) exchange-rate / price download | Rates are fetched only when you press **Get exchange rates** (RBA F11.1 for currencies, CoinGecko for crypto), through the local server. Otherwise import published tables or enter rates with a source. |
 | Electronic lodgment of tax returns or BAS | Reports are preparation documents for a tax agent. |
 | OCR / automatic reading of PDF statements or receipts | Documents are stored with hashes and basic metadata only. |
 | Encrypted local database | Browser storage is protected only by the operating-system account. Backups can be encrypted. |
@@ -80,6 +80,17 @@ threshold, and [VALIDATION_STATUS.md](VALIDATION_STATUS.md) for the summary.
   in the app, CSV exports and backups).
 * The service worker requires `localhost` or HTTPS; opening `dist/index.html` directly from the file system will not
   work offline — use the included server.
+
+* **Get exchange rates — what was not verified.** The RBA and CoinGecko sites could not be opened from the
+  environment this version was built in. The RBA F11.1 file address and layout (description rows, a “Series ID”
+  row, then `dd-MMM-yyyy` rows of foreign units per A$1) and CoinGecko’s `market_chart/range` endpoint and
+  `x-cg-demo-api-key` header were taken from public descriptions, not from a live download. The parser refuses a
+  file it does not recognise instead of guessing, and every fetch is previewed before saving. The RBA F11.1 file
+  may cover only recent years; dates it lacks stay “missing” — import an older RBA table for those. CoinGecko’s
+  free plan covers about the last 365 days. A daily CoinGecko price (≈00:00 UTC) is not the price at the time of
+  your trade; prefer your exchange’s own prices or execution rates where you have them.
+* Tax rules are built in up to 2026–27. From 1 July 2027 the year can be selected and records kept, but the
+  estimate is withheld until a version with that year’s checked rule set is installed.
 
 ## Testing limitations
 

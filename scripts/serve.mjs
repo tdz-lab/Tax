@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Minimal local web server for the pre-built application (Node.js built-ins only, no internet needed).
+// Minimal local web server for the pre-built application (Node.js built-ins only, no internet needed —
+// except when you press "Get exchange rates", see rates-proxy.mjs).
 // Usage: node scripts/serve.mjs [port]   → open http://localhost:4173
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -7,6 +8,7 @@ import { existsSync } from 'node:fs';
 import { extname, join, normalize, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { exec } from 'node:child_process';
+import { handleRatesRequest } from './rates-proxy.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
 const port = Number(process.argv[2] || process.env.PORT || 4173);
@@ -30,6 +32,7 @@ if (!existsSync(join(root, 'index.html'))) {
 
 const server = createServer(async (req, res) => {
   try {
+    if (await handleRatesRequest(req, res)) return;
     const url = new URL(req.url ?? '/', 'http://localhost');
     let path = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
     if (path.includes('..')) {

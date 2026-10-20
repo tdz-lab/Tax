@@ -63,8 +63,9 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 * **No live connections** to banks, brokers, exchanges, wallets or accounting systems. No credentials are requested
   or stored and no data leaves your device. The connector *framework* exists for future versions (see §19).
 * **No lodgment** of tax returns or BAS, and no ATO-certified calculations.
-* **No automatic download** of exchange rates or prices — you import published tables (e.g. RBA historical rates)
-  or enter rates with their source. Missing rates are flagged, never guessed.
+* **No background downloads.** The app only goes online when you press **Get exchange rates** (see §10), and then
+  sends just a currency or coin name and dates. Otherwise you import published tables or enter rates with their
+  source. Missing rates are flagged, never guessed.
 * **No OCR** or automatic reading of PDF statements.
 * Some personal-tax items are **not calculated** or only partly calculated: 2026–27 Medicare low-income and family
   reductions (thresholds not yet published), SAPTO, private health insurance rebate, non-commercial loss rules,
@@ -84,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.4.1.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.5.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -94,7 +95,10 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
    terminal window open while you use the application.
 5. **New to the app?** Click **Take the 4-minute guided tour** on the welcome screen, or open **Tutorials** in the menu
    (every section also has a **? Tutorial** button at the top right).
-6. The app opens in the **Simple** layout (see below). The welcome screen offers three steps — answer a few quick
+6. The financial year at the top defaults to **Current year**, which moves on to the new year by itself each
+   1 July; choose a specific year to stay on it. (Tax rules are built in up to 2026–27 — later years need an
+   updated version of the app.)
+7. The app opens in the **Simple** layout (see below). The welcome screen offers three steps — answer a few quick
    questions, add your money accounts, add your trades — or fictional **demonstration data** to explore.
    In the **Advanced** layout the same start looks like this:
    1. *Tax & Business → Tax profile*: record your residency for the year.
@@ -222,6 +226,21 @@ recognised automatically next time. Manage templates in *Settings → Import tem
 * Crypto and stablecoins need **price records** (e.g. `USDT/AUD`) — a stablecoin is never assumed to equal US$1.
 * **Missing rates** are flagged everywhere (record, dashboard, data quality, reports). Fix them by importing rates
   or entering a manual rate with its **source and reason**; affected figures recalculate automatically.
+* **Get exchange rates** (top of *Import files*; the to-do item “needs an exchange rate” links there) lists the
+  currencies and dates still missing a rate and fetches them on request:
+  * **currencies** (USD, EUR, …) from the Reserve Bank of Australia daily table **F11.1** (`f11.1-data.csv`,
+    units of foreign currency per A$1). The ATO’s own annual exchange-rate tables have used RBA rates since
+    January 2020;
+  * **crypto** from **CoinGecko** AUD prices (one per day, at about 00:00 UTC). CoinGecko’s free *Demo* plan needs a
+    free key (entered on the panel, kept in this browser only) and covers only about the **last 365 days** — for
+    older dates import a price CSV, e.g. from your exchange. Common coins have their CoinGecko id filled in; for
+    others type the id from the coin’s CoinGecko page address.
+
+  You see what was found before anything is saved. The rates are saved as an ordinary import (source recorded,
+  duplicates skipped, **rollback** in *Import history*), then every record is re-converted. Rates you entered
+  yourself and broker execution rates are not changed. The request goes through the app’s own local server (the
+  start scripts), because browsers do not let a web page read these sites directly — so it needs the app started
+  with a start script and an internet connection.
 
 ## 11. Tax calculations
 

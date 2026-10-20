@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.4.1.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.5.0.
 
 ## Commands and results
 
@@ -9,9 +9,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 | --- | --- | --- |
 | `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` (`vitest run`) | 198 unit/integration tests in 12 files | **198 passed, 0 failed** |
-| `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,799 KiB) | **Passed** |
-| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 6 Playwright tests against the production build (incl. every tutorial step and the simple layout) | **6 passed, 0 failed** |
+| `npm test` (`vitest run`) | 205 unit/integration tests in 13 files | **205 passed, 0 failed** |
+| `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,812 KiB) | **Passed** |
+| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 9 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs and fetching rates) | **9 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -117,6 +117,17 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
   plain-language item linking to the fix; a clean year has nothing to do.
 * The short “My tax return figures” PDF is a valid PDF of at most three pages, shorter than the full report.
 
+### Get exchange rates (`tests/unit/rateFetch.test.ts`)
+* RBA F11.1 parser on a hand-written file in the expected layout (not a live RBA download): currency per column
+  from the title, units or series id; foreign units per A$1; the trade-weighted index, blanks and “CLOSED” skipped;
+  an unrecognised file is refused rather than guessed.
+* CoinGecko parser: first AUD price of each UTC date; zero/invalid prices skipped; an answer without prices refused.
+  The request window is limited to the free plan’s ~365 days and the too-old dates are reported.
+* End to end in the database: missing USD rate listed → only the needed rates imported as one batch → the record
+  is converted (1 / 0.6920) with the RBA source → nothing is missing → fetching again adds nothing → rollback
+  removes the rates. Common coins get their CoinGecko id.
+* Not tested against the live RBA or CoinGecko services (they could not be reached from the test environment).
+
 ### Performance (`tests/unit/performance.test.ts`)
 * 100,000 transactions (shares across 50 instruments, futures, expenses): lot + derivative engines **≈1.7 s**,
   tax-year computation **≈0.27 s**, 25,456 disposals, no incomplete results (measured in the test container).
@@ -138,8 +149,16 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
    Trading sidebar link highlighted at a time, Add trades page, Tax summary without the full report (off by
    default) and the short PDF downloaded (`%PDF-` header). No page or console errors.
 
+3b. **Typing in dialogs** — letter-by-letter typing in the Add account, Money in, quick-questions, classification
+   rule and record dialogs keeps the cursor in the field (this test fails on 1.4.1, where every keystroke moved
+   focus to the dialog’s close button).
+3c. **Get exchange rates** — a USD record without a rate is listed; with a stand-in RBA response the panel shows
+   what was found, saves 2 rates, the record is converted, and the fetch appears in import history; the local
+   server’s rate relay answers.
+3d. **Year selector** — defaults to *Current year*; a picked year stays after reload; *Current year* can be chosen again.
+
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)
-4. **Every tutorial step** — with practice data loaded, all 30 tutorials (318 steps) are run from the Tutorials
+4. **Every tutorial step** — with practice data loaded, all 30 tutorials (320 steps) are run from the Tutorials
    page; at every step the highlighted element must be found on screen. “Your turn” steps are skipped (so the test
    also proves later steps recover when a user skips); the only exceptions are 11 steps that by design need the
    user’s action first (e.g. the mapping screen after choosing a CSV file, the conversion panel of a just-saved

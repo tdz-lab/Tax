@@ -197,7 +197,8 @@ function FySelect() {
       <span className="muted" style={{ fontSize: 12 }}>
         Financial year
       </span>
-      <select aria-label="Selected financial year" value={fy} onChange={(e) => setFy(Number(e.target.value))}>
+      <select aria-label="Selected financial year" value={settings.selectedFY === null ? 'auto' : fy} onChange={(e) => setFy(e.target.value === 'auto' ? null : Number(e.target.value))}>
+        <option value="auto">Current year — {fyLabel(cur)} (moves on each 1 July)</option>
         {years.map((y) => (
           <option key={y} value={y}>
             {fyLabel(y)}

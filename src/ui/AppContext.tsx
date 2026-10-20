@@ -18,7 +18,8 @@ interface Ctx {
   settings: AppSettings;
   updateSettings: (patch: Partial<AppSettings>) => Promise<void>;
   fy: number;
-  setFy: (fy: number) => void;
+  /** A year number pins that year; null follows the current financial year automatically. */
+  setFy: (fy: number | null) => void;
   saveState: SaveState;
   saveError: string | null;
   /** Run a persistence operation with save-status tracking and error reporting. */
@@ -100,8 +101,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSettings(next);
   }, []);
 
-  const fy = settings.selectedFY ?? currentFY(new Date(), settings.taxTimeZone);
-  const setFy = useCallback((v: number) => void updateSettings({ selectedFY: v }), [updateSettings]);
+  // When following the current year, re-check the clock each minute so an app left open rolls over on 1 July.
+  const [nowFy, setNowFy] = useState(() => currentFY(new Date(), settings.taxTimeZone));
+  useEffect(() => {
+    const tick = () => setNowFy(currentFY(new Date(), settings.taxTimeZone));
+    tick();
+    const t = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(t);
+  }, [settings.taxTimeZone]);
+  const fy = settings.selectedFY ?? nowFy;
+  const setFy = useCallback((v: number | null) => void updateSettings({ selectedFY: v }), [updateSettings]);
 
   const reportSave = useCallback((state: SaveState, error: string | null = null) => {
     setSaveState(state);

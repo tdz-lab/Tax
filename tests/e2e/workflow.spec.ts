@@ -292,3 +292,86 @@ test('simple mode: home, money accounts, add trades and tax summary', async ({ p
   await expect(page.getByRole('heading', { name: /Your FY2024/ })).toBeVisible();
   expect(errors).toEqual([]);
 });
+
+test('typing letter by letter in dialogs keeps the cursor in the field', async ({ page }) => {
+  await page.goto('./');
+  await selectFY(page, '2025');
+  const typeInto = async (field: ReturnType<Page['getByLabel']>, text: string) => {
+    await field.click();
+    await field.pressSequentially(text, { delay: 15 });
+    await expect(field).toHaveValue(text);
+  };
+  await page.goto('./#/money');
+  await page.getByRole('button', { name: '+ Add account' }).click();
+  let dlg = page.getByRole('dialog');
+  await expect(dlg.getByLabel('Name (anything you like)')).toBeFocused();
+  await typeInto(dlg.getByLabel('Name (anything you like)'), 'Impact affiliate');
+  await typeInto(dlg.getByLabel('Notes (optional)'), 'paid monthly');
+  await dlg.getByRole('button', { name: 'Add account' }).click();
+  await page.getByRole('button', { name: '+ Money in' }).first().click();
+  dlg = page.getByRole('dialog');
+  await typeInto(dlg.getByLabel('Description'), 'October commissions');
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
+  await page.goto('./#/');
+  await page.getByRole('button', { name: /Answer a few quick questions/ }).click();
+  dlg = page.getByRole('dialog');
+  await dlg.getByRole('button', { name: 'Part of the year' }).first().click();
+  await typeInto(dlg.getByLabel('How many months were you a resident?'), '7');
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
+  await page.goto('./#/settings?tab=tax');
+  await page.getByRole('button', { name: '+ Add rule' }).click();
+  dlg = page.getByRole('dialog');
+  await typeInto(dlg.getByLabel('Rule name'), 'Hosting is a business expense');
+  await dlg.getByRole('button', { name: 'Cancel' }).click();
+  await page.goto('./#/transactions');
+  await page.getByRole('button', { name: '+ New record' }).click();
+  dlg = page.getByRole('dialog');
+  await typeInto(dlg.getByLabel('Description'), 'Typed one key at a time');
+});
+
+test('get exchange rates: fetch from the RBA (stand-in response), preview, save, record converted', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  // The real file comes from rba.gov.au through the local server; here a hand-written file in the same layout stands in.
+  const rba = ['Title,AUD/USD Exchange Rate', 'Units,USD', 'Series ID,FXRUSD', '27-Sep-2024,0.6890', '30-Sep-2024,0.6920'].join('\n');
+  await page.route('**/__rates/rba-f11', (r) => r.fulfill({ status: 200, contentType: 'text/csv', body: rba }));
+  await page.goto('./');
+  await selectFY(page, '2025');
+  await page.goto('./#/money');
+  await page.getByRole('button', { name: '+ Money in' }).first().click();
+  const q = page.getByRole('dialog');
+  await q.getByLabel('Date').fill('2024-09-30');
+  await q.getByLabel('Amount').fill('100');
+  await q.getByLabel('Currency').fill('USD');
+  await q.getByLabel('Description').fill('US affiliate payout');
+  if (!(await q.getByLabel('What is it?').inputValue())) await q.getByLabel('What is it?').selectOption({ index: 1 });
+  await q.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.goto('./#/');
+  await page.getByRole('button', { name: 'Get rates' }).click();
+  const panel = page.locator('#get-rates');
+  await expect(panel.getByRole('cell', { name: 'USD' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Fetch rates' }).click();
+  await expect(panel.getByText('USD — RBA')).toBeVisible();
+  await expect(panel.getByText(/2 daily rates/)).toBeVisible();
+  await panel.getByRole('button', { name: 'Save 2 rates' }).click();
+  await expect(page.getByText(/2 rates added; 1 record now converted to AUD/).first()).toBeVisible();
+  await expect(panel.getByText('Every record has an AUD rate.')).toBeVisible();
+  // The fetched rates are an ordinary import that can be rolled back.
+  await expect(page.getByRole('cell', { name: /RBA F11\.1 exchange rates — fetched/ })).toBeVisible();
+  const ping = await page.request.get('./__rates/ping');
+  expect(await ping.text()).toBe('ok');
+  expect(errors).toEqual([]);
+});
+
+test('year selector follows the current year by default and can be pinned', async ({ page }) => {
+  await page.goto('./');
+  const sel = page.getByLabel('Selected financial year');
+  await expect(sel).toHaveValue('auto');
+  await expect(sel.locator('option[value="auto"]')).toHaveText(/^Current year — FY\d{4}–\d{2} \(moves on each 1 July\)$/);
+  await sel.selectOption('2025');
+  await page.reload();
+  await expect(page.getByLabel('Selected financial year')).toHaveValue('2025');
+  await page.getByLabel('Selected financial year').selectOption('auto');
+  await page.reload();
+  await expect(page.getByLabel('Selected financial year')).toHaveValue('auto');
+});

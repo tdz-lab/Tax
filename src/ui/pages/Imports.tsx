@@ -20,6 +20,7 @@ import { useApp } from '../AppContext';
 import { useAccounts } from '../hooks';
 import { DataTable } from '../components/DataTable';
 import { Confirm, Select, StatusBadge, TextInput } from '../components/ui';
+import { GetRates } from '../components/GetRates';
 
 type Step = 'file' | 'map' | 'preview' | 'done';
 const TARGETS = Object.keys(TARGET_LABEL) as ImportTarget[];
@@ -32,6 +33,7 @@ export function Imports() {
         <h1>Imports</h1>
         <span className="muted">CSV statements from brokers, exchanges, wallets, banks, prop firms and rate tables — processed entirely on this device.</span>
       </div>
+      <GetRates />
       <Wizard />
       <History />
       <div className="panel">

@@ -49,10 +49,11 @@ export const ratesImportTour: Tour = {
   id: 'currency-import',
   section: '/imports',
   title: 'Importing exchange rates & crypto prices',
-  summary: 'Long and wide rate tables (e.g. RBA historical data), naming the source, direction, crypto/stablecoin prices and what happens after import.',
+  summary: 'Fetching missing rates with one button, long and wide rate tables (e.g. RBA historical data), naming the source, direction, crypto/stablecoin prices and what happens after import.',
   minutes: 7,
   steps: [
-    { title: 'Where rates come from', route: '/imports', body: `The app does not download rates itself (it works offline and never assumes a source). You download published tables and import them, for example:
+    { title: 'Get exchange rates', route: '/imports', target: 'panel:Get exchange rates', body: `The quickest way: this panel lists every currency and coin that still has no AUD rate and, when you press **Fetch rates**, gets them from the **RBA** (currencies) and **CoinGecko** (crypto, last ~365 days with a free key). You see what was found before saving, and the import can be rolled back. It only goes online when you press the button.` },
+    { title: 'Or import a file', body: `For anything the button can’t get (older crypto prices, other sources), download published tables and import them, for example:
 - the **RBA** historical exchange-rate tables (daily AUD rates for major currencies)
 - a broker’s or exchange’s conversion/price history
 - crypto price history (e.g. BTC/AUD, USDT/AUD) from a source you trust

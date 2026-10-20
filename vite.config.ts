@@ -2,11 +2,13 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
+import { ratesProxyPlugin } from './scripts/rates-proxy.mjs';
 
 export default defineConfig({
   base: './',
   plugins: [
     react(),
+    ratesProxyPlugin(),
     VitePWA({
       registerType: 'prompt',
       injectRegister: null,
@@ -30,6 +32,7 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,svg,png,csv,webmanifest}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
         navigateFallback: 'index.html',
+        navigateFallbackDenylist: [/^\/__rates\//],
         clientsClaim: true
       },
       devOptions: { enabled: false }

@@ -39,13 +39,13 @@ Use **Next** and **Back** to move through a tutorial. Steps marked **Your turn**
       target: '[aria-label="Selected financial year"]',
       body: `Australian financial years run **1 July – 30 June**. FY2024–25 means 1 July 2024 to 30 June 2025.
 
-Most pages show the year selected here. The choice is remembered when you move between sections.`
+Most pages show the year selected here. **Current year** (the first choice, and the default) moves on to the new financial year by itself each 1 July. Picking a specific year keeps that year until you change it.`
     },
     {
       title: 'Try changing the year',
       target: '[aria-label="Selected financial year"]',
       body: 'Pick a different financial year from the list. (The practice data, if loaded, is in FY2024–25.)',
-      tryIt: tryValue('Choose any other financial year in the selector.', '[aria-label="Selected financial year"]', (v) => v !== '')
+      tryIt: tryValue('Choose any other financial year in the selector.', '[aria-label="Selected financial year"]', (v) => v !== '' && v !== 'auto')
     },
     {
       title: 'Search everything',
