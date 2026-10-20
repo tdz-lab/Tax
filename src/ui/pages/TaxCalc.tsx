@@ -219,7 +219,7 @@ export function TaxCalc() {
             <div className="panel">
               <h2>Rule set {rs.id}</h2>
               <p>
-                Status: <StatusBadge status={rs.status} /> · Resident brackets: {rs.residentBrackets.map((b) => `${(Number(b.rate) * 100).toFixed(1)}% over $${b.above.toLocaleString()}`).join('; ')}
+                Status: <StatusBadge status={rs.status} /> · Resident brackets: {rs.residentBrackets.map((b) => `${(Number(b.rate) * 100).toFixed(1)}% over $${Number(b.above).toLocaleString('en-AU')}`).join('; ')}
               </p>
               {rs.checks && rs.checks.length > 0 && (
                 <details className="adv" open>

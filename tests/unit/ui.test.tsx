@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { DataTable } from '../../src/ui/components/DataTable';
-import { DecimalInput } from '../../src/ui/components/ui';
+import { DecimalInput, groupDigits } from '../../src/ui/components/ui';
 import { useState } from 'react';
 
 type Row = { id: string; name: string; amount: number };
@@ -56,5 +56,16 @@ describe('DecimalInput', () => {
     expect(screen.getByText('Enter a non-negative number')).toBeInTheDocument();
     fireEvent.change(input, { target: { value: '-5' } });
     expect(last).toBe('0.1');
+  });
+});
+
+describe('amount inputs show thousands separators', () => {
+  it('groups the whole-number part and keeps typed decimals exactly', () => {
+    expect(groupDigits('5000')).toBe('5,000');
+    expect(groupDigits('1234567.50')).toBe('1,234,567.50');
+    expect(groupDigits('-25000.123456789')).toBe('-25,000.123456789');
+    expect(groupDigits('1,2345')).toBe('12,345');
+    expect(groupDigits('999')).toBe('999');
+    expect(groupDigits('abc')).toBe('abc');
   });
 });

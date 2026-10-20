@@ -93,11 +93,17 @@ export function TextInput({ label, value, onChange, hint, className, placeholder
   );
 }
 
-/** Decimal input kept as a string (never converted through floating point). */
+/** Adds thousands separators to the whole-number part of a typed number, keeping its decimals exactly as typed. */
+export function groupDigits(v: string): string {
+  const m = /^(-?)(\d+)(\.\d*)?$/.exec(v.trim().replace(/,/g, ''));
+  return m ? `${m[1]}${m[2].replace(/\B(?=(\d{3})+(?!\d))/g, ',')}${m[3] ?? ''}` : v;
+}
+
+/** Decimal input kept as a string (never converted through floating point). Shows 1,000 separators when not being edited. */
 export function DecimalInput({ label, value, onChange, hint, className, allowNegative, placeholder, required }: { label: ReactNode; value: string | undefined; onChange: (v: string | undefined) => void; hint?: ReactNode; className?: string; allowNegative?: boolean; placeholder?: string; required?: boolean }) {
-  const [raw, setRaw] = useState(value ?? '');
+  const [raw, setRaw] = useState(groupDigits(value ?? ''));
   useEffect(() => {
-    if ((tryD(raw)?.toString() ?? '') !== (tryD(value)?.toString() ?? '')) setRaw(value ?? '');
+    if ((tryD(raw)?.toString() ?? '') !== (tryD(value)?.toString() ?? '')) setRaw(groupDigits(value ?? ''));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
   const strict = (v: string) => /^-?(\d+\.?\d*|\.\d+)$/.test(v.trim().replace(/,/g, '')) && isValidDecimal(v);
@@ -116,6 +122,7 @@ export function DecimalInput({ label, value, onChange, hint, className, allowNeg
             if (v.trim() === '') onChange(undefined);
             else if (strict(v) && (allowNegative || !tryD(v)!.isNegative())) onChange(tryD(v)!.toString());
           }}
+          onBlur={() => setRaw((r) => groupDigits(r))}
         />
       )}
     </Field>

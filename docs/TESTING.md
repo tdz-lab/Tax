@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.4.0 (simple layout).
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.4.1.
 
 ## Commands and results
 
@@ -9,7 +9,7 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 | --- | --- | --- |
 | `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` (`vitest run`) | 197 unit/integration tests in 12 files | **197 passed, 0 failed** |
+| `npm test` (`vitest run`) | 198 unit/integration tests in 12 files | **198 passed, 0 failed** |
 | `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,799 KiB) | **Passed** |
 | `npm run test:e2e` (`playwright test`, against `npm run preview`) | 6 Playwright tests against the production build (incl. every tutorial step and the simple layout) | **6 passed, 0 failed** |
 
@@ -108,7 +108,7 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
 * Document storage with SHA-256 and duplicate rejection; transfer-pair suggestions; immutable calculation snapshots.
 
 ### UI components (`tests/unit/ui.test.tsx`)
-* DataTable pagination, sorting, filtering, page/all selection; decimal input validation keeps strings.
+* DataTable pagination, sorting, filtering, page/all selection; decimal input validation keeps strings; amount inputs show 1,000 separators without changing typed decimals.
 
 ### Simple layout (`tests/unit/simple.test.ts`)
 * Headline figures and the grouped “tax return figures” are read from the engine result (no new calculations) and

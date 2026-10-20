@@ -84,7 +84,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.4.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.4.1.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
