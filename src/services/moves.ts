@@ -1,7 +1,7 @@
 /**
  * Moving money between your own accounts (bank → bank, bank → PayPal, bank → broker…). Like a "transfer" in
  * Xero or QuickBooks it is entered once — from, to, date, amount, optional note — and is never income, an
- * expense or a sale. It is stored as two linked records (money out of one account, into the other), classified
+ * expense or a sale. It is stored as two linked records (out of one account, into the other), classified
  * as an own transfer, so each account's history stays complete.
  */
 import { getDb } from '../db/schema';

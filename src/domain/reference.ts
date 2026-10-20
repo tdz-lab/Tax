@@ -81,7 +81,7 @@ export const LOT_ASSET_CLASSES: AssetClass[] = ['au_share', 'us_share', 'intl_sh
 /** Position-based derivatives: realised P&L from matched opens/closes. */
 export const DERIVATIVE_CLASSES: AssetClass[] = ['future', 'cfd', 'forex'];
 
-/** Account types used for money in / out (everything else is a trading account: brokers, exchanges, wallets, prop firms). */
+/** Account types used for income and expenses (everything else is a trading account: brokers, exchanges, wallets, prop firms). */
 export const MONEY_ACCOUNT_TYPES: AccountType[] = ['bank', 'cash', 'income_source', 'expense_source', 'payment', 'other'];
 export const isTradingAccountType = (t: AccountType) => !MONEY_ACCOUNT_TYPES.includes(t);
 

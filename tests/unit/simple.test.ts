@@ -101,7 +101,7 @@ describe('money accounts', () => {
     expect(capFirst('3commas')).toBe('3commas');
     expect(capFirst('')).toBe('');
   });
-  it('income sources are for money in, expense accounts for money out, banks and payment accounts for both', () => {
+  it('income sources are for income, expense accounts for expenses, banks and payment accounts for both', () => {
     expect(moneyUseOf({ type: 'income_source' })).toBe('in');
     expect(moneyUseOf({ type: 'expense_source' })).toBe('out');
     expect(moneyUseOf({ type: 'bank' })).toBe('both');

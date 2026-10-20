@@ -253,15 +253,15 @@ test('simple mode: home, money accounts, add trades and tax summary', async ({ p
     await expect(dlg).toHaveCount(0);
   });
 
-  await test.step('add a custom income source and record money in', async () => {
-    await nav.getByRole('link', { name: 'Money in & out' }).click();
+  await test.step('add a custom income source and record income', async () => {
+    await nav.getByRole('link', { name: 'Income & expenses' }).click();
     await page.getByRole('button', { name: '+ Add account' }).click();
     const dlg = page.getByRole('dialog');
     await dlg.getByLabel('Name (anything you like)').fill('My CPA Network');
     await dlg.getByRole('button', { name: 'Add account' }).click();
     await expect(dlg).toHaveCount(0);
     await expect(page.getByText('My CPA Network').first()).toBeVisible();
-    await page.getByRole('button', { name: '+ Money in' }).first().click();
+    await page.getByRole('button', { name: '+ Income' }).first().click();
     const q = page.getByRole('dialog');
     await q.getByLabel('Date').fill('2024-10-01');
     await q.getByLabel('Amount').fill('1200');
@@ -308,7 +308,7 @@ test('typing letter by letter in dialogs keeps the cursor in the field', async (
   await typeInto(dlg.getByLabel('Name (anything you like)'), 'Impact affiliate');
   await typeInto(dlg.getByLabel('Notes (optional)'), 'paid monthly');
   await dlg.getByRole('button', { name: 'Add account' }).click();
-  await page.getByRole('button', { name: '+ Money in' }).first().click();
+  await page.getByRole('button', { name: '+ Income' }).first().click();
   dlg = page.getByRole('dialog');
   await typeInto(dlg.getByLabel('Description'), 'October commissions');
   await dlg.getByRole('button', { name: 'Cancel' }).click();
@@ -338,7 +338,7 @@ test('get exchange rates: fetch from the RBA (stand-in response), preview, save,
   await page.goto('./');
   await selectFY(page, '2025');
   await page.goto('./#/money');
-  await page.getByRole('button', { name: '+ Money in' }).first().click();
+  await page.getByRole('button', { name: '+ Income' }).first().click();
   const q = page.getByRole('dialog');
   await q.getByLabel('Date').fill('2024-09-30');
   await q.getByLabel('Amount').fill('100');
@@ -422,14 +422,14 @@ test('delete money accounts: empty account deleted, account with records hidden 
   expect(errors).toEqual([]);
 });
 
-test('money in and money out accounts are kept apart; banks are offered for both and for moving money', async ({ page }) => {
+test('income and expense accounts are kept apart; banks are offered for both and for moving money', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('./');
   await selectFY(page, '2025');
   await page.goto('./#/money');
-  const addIn = page.getByRole('region', { name: 'Money in' });
-  const addOut = page.getByRole('region', { name: 'Money out' });
+  const addIn = page.getByRole('region', { name: 'Income', exact: true });
+  const addOut = page.getByRole('region', { name: 'Expenses', exact: true });
   const banks = page.getByRole('region', { name: 'Banks & payment accounts' });
   const create = async (section: typeof addIn, typed: string) => {
     await section.getByRole('button', { name: '+ Add' }).click();
@@ -453,11 +453,11 @@ test('money in and money out accounts are kept apart; banks are offered for both
     await d.getByRole('button', { name: 'Cancel' }).click();
     return texts.join(' | ');
   };
-  const inOpts = await optionsFor('+ Money in');
+  const inOpts = await optionsFor('+ Income');
   expect(inOpts).toContain('Impact affiliate');
   expect(inOpts).toContain('Commbank');
   expect(inOpts).not.toContain('Hosting co');
-  const outOpts = await optionsFor('+ Money out');
+  const outOpts = await optionsFor('+ Expense');
   expect(outOpts).toContain('Hosting co');
   expect(outOpts).toContain('Commbank');
   expect(outOpts).not.toContain('Impact affiliate');
@@ -467,7 +467,7 @@ test('money in and money out accounts are kept apart; banks are offered for both
   await expect(page.getByRole('dialog', { name: 'Move money' })).toBeVisible();
   await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 
-  // Trading accounts (e.g. a prop-firm account) are not offered for money in/out, but are listed — and deletable.
+  // Trading accounts (e.g. a prop-firm account) are not offered for income or expenses, but are listed — and deletable.
   await page.getByRole('button', { name: '+ Add account' }).click();
   const d = page.getByRole('dialog');
   await d.getByLabel('Name (anything you like)').fill('65465');
@@ -475,7 +475,7 @@ test('money in and money out accounts are kept apart; banks are offered for both
   await d.getByRole('button', { name: 'Add account' }).click();
   const trading = page.getByRole('region', { name: 'Trading accounts' });
   await expect(trading.getByText('65465')).toBeVisible();
-  expect(await optionsFor('+ Money in')).not.toContain('65465');
+  expect(await optionsFor('+ Income')).not.toContain('65465');
   await trading.getByRole('button', { name: 'Edit 65465' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete…' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Delete account' }).click();
@@ -513,7 +513,7 @@ test('hidden accounts with records can be deleted and then disappear everywhere'
   await expect(d.getByRole('button', { name: /Hide the account/ })).toHaveCount(0); // already hidden
   await d.getByRole('button', { name: /Delete the account and its 1 record/ }).click();
   await expect(page.getByText(/Hidden accounts/)).toHaveCount(0);
-  await page.getByRole('button', { name: '+ Money in' }).first().click();
+  await page.getByRole('button', { name: '+ Income' }).first().click();
   expect((await page.getByRole('dialog').getByLabel('Account').locator('option').allTextContents()).join('|')).not.toContain('Old network');
 });
 
@@ -542,7 +542,7 @@ test('move money between banks: one simple entry, not a trade, not income or an 
   await d.getByLabel('Note (optional)').fill('savings');
   await d.getByRole('button', { name: 'Move money' }).click();
   await expect(page.getByText('Money moved.')).toBeVisible();
-  // Listed once on Money in & out, not counted in the totals.
+  // Listed once on Income & expenses, not counted in the totals.
   await expect(page.getByRole('cell', { name: 'Moved to CommBank — savings' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Moved out' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Moved from NAB — savings' })).toHaveCount(0);
@@ -602,11 +602,11 @@ test('start again: delete selected data, then everything', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('money out: categories grouped under headings; business expenses broken down in the tax summary', async ({ page }) => {
+test('expenses: categories grouped under headings; business expenses broken down in the tax summary', async ({ page }) => {
   await page.goto('./');
   await selectFY(page, '2025');
   await page.goto('./#/money');
-  await page.getByRole('button', { name: '+ Money out' }).first().click();
+  await page.getByRole('button', { name: '+ Expense' }).first().click();
   const d = page.getByRole('dialog');
   const sel = d.getByLabel('What was it for?');
   await expect(sel.locator('optgroup[label="Marketing & advertising"] option')).toHaveText(['Paid ads (PPC)', 'Influencer & affiliate payouts', 'Native & solo ads']);

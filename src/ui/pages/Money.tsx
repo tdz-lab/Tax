@@ -1,6 +1,6 @@
 /**
- * Simple mode: money in & money out. Your own named accounts (banks, affiliate / CPA networks, PayPal,
- * brokers, wallets…), quick entry of money in / out, and a plain profit & loss for the year.
+ * Simple mode: income & expenses. Your own named accounts (banks, affiliate / CPA networks, PayPal,
+ * brokers, wallets…), quick entry of income and expenses, and a plain profit & loss for the year.
  */
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -34,7 +34,7 @@ export const SIMPLE_KINDS: { type: AccountType; label: string; hint: string; tra
 ];
 const isTradingType = isTradingAccountType;
 
-/** Whether an account is offered for money in, money out or both (banks and payment accounts are both). */
+/** Whether an account is offered for income, expenses or both (banks and payment accounts are both). */
 export function moneyUseOf(a: Pick<Account, 'type' | 'moneyUse'>): 'in' | 'out' | 'both' {
   return a.moneyUse ?? (a.type === 'income_source' ? 'in' : a.type === 'expense_source' ? 'out' : 'both');
 }
@@ -178,8 +178,8 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
             <div className="row" style={{ gap: 6 }} role="group" aria-label="Use it for">
               {(
                 [
-                  ['in', 'Money in'],
-                  ['out', 'Money out'],
+                  ['in', 'Income'],
+                  ['out', 'Expenses'],
                   ['both', 'Both']
                 ] as const
               ).map(([v, l]) => (
@@ -188,7 +188,7 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
                 </button>
               ))}
             </div>
-            <span className="hint">+ Money in only offers accounts for money in (or both), and + Money out only accounts for money out (or both). Choose “Both” for banks, PayPal and other accounts you also move money between.</span>
+            <span className="hint">+ Income only offers income accounts (or both), and + Expense only expense accounts (or both). Choose “Both” for banks, PayPal and other accounts you also move money between.</span>
           </div>
         )}
         {!trading && moneyUseOf(a as Account) !== 'in' && (
@@ -222,10 +222,10 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
   );
 }
 
-/** Quick money in / money out entry. */
+/** Quick income / expense entry. */
 export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 'in' | 'out'; accountId?: string; onClose: () => void }) {
   const { run, fy, settings } = useApp();
-  // Money in offers only money-in and “both” accounts (money out the reverse); trading accounts live under Trading.
+  // Income offers only income and “both” accounts (expenses the reverse); trading accounts live under Trading.
   const accounts = useAccounts()
     .filter((a) => a.id === accountId || (!a.archived && !isTradingType(a.type) && usableFor(a, direction)))
     .sort((x, y) => Number(moneyUseOf(x) === 'both') - Number(moneyUseOf(y) === 'both') || x.name.localeCompare(y.name));
@@ -248,7 +248,7 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
         saveTransaction({
           kind: direction === 'in' ? 'income' : 'expense',
           date: f.date,
-          description: f.description || cat?.name || (direction === 'in' ? 'Money in' : 'Money out'),
+          description: f.description || cat?.name || (direction === 'in' ? 'Income' : 'Expense'),
           amount: f.amount!,
           currency: f.currency.toUpperCase(),
           category: f.category,
@@ -260,14 +260,14 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
           relatedIds: [],
           source: 'manual'
         }),
-      { success: direction === 'in' ? 'Money in recorded.' : 'Money out recorded.' }
+      { success: direction === 'in' ? 'Income recorded.' : 'Expense recorded.' }
     );
     if (t) onClose();
   };
   if (newAcct) return <AccountModal defaultType={direction === 'in' ? 'income_source' : 'expense_source'} onClose={(a) => { setNewAcct(false); if (a) setF({ ...f, accountId: a.id, currency: a.currency }); }} />;
   return (
     <Modal
-      title={direction === 'in' ? 'Money in' : 'Money out'}
+      title={direction === 'in' ? 'Add income' : 'Add an expense'}
       onClose={onClose}
       footer={
         <>
@@ -308,9 +308,9 @@ export function plRows(txns: Transaction[], catName: Map<string, string>) {
   return { inRows, outRows, inTotal: total(inRows), outTotal: total(outRows) };
 }
 const SECTIONS: { use: 'in' | 'out' | 'both'; title: string; addType: AccountType; empty: string }[] = [
-  { use: 'in', title: 'Money in', addType: 'income_source', empty: 'Where money comes from — e.g. affiliate or CPA networks, marketplaces, clients.' },
-  { use: 'out', title: 'Money out', addType: 'expense_source', empty: 'Where money goes — e.g. hosting, software, ad spend, suppliers.' },
-  { use: 'both', title: 'Banks & payment accounts', addType: 'bank', empty: 'Bank accounts, PayPal, Stripe, Wise… — used for money in, money out and moving money between your accounts.' }
+  { use: 'in', title: 'Income', addType: 'income_source', empty: 'Where money comes from — e.g. affiliate or CPA networks, marketplaces, clients.' },
+  { use: 'out', title: 'Expenses', addType: 'expense_source', empty: 'Where money goes — e.g. hosting, software, ad spend, suppliers.' },
+  { use: 'both', title: 'Banks & payment accounts', addType: 'bank', empty: 'Bank accounts, PayPal, Stripe, Wise… — used for income, expenses and moving money between your accounts.' }
 ];
 const fm = (v: Decimal | null) => (v === null ? 'needs exchange rate' : formatMoney(v));
 
@@ -326,7 +326,7 @@ export function Money() {
   const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'income' || t.kind === 'expense' || t.kind === 'fee')).toArray(), [fy], []);
   const catName = useMemo(() => new Map(categories.map((c) => [c.code, c.name])), [categories]);
   const shown = filter ? txns.filter((t) => (filter === '__none' ? !t.accountId : t.accountId === filter)) : txns;
-  // Money moved between your own accounts: listed with the records, never counted as money in or out.
+  // Money moved between your own accounts: listed with the records, never counted as income or an expense.
   const moves = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && isMoneyMove(t)).toArray(), [fy], []);
   const tableRows = useMemo(() => {
     const ms = moves.filter((t) => (filter ? t.accountId === filter : t.side === 'send'));
@@ -356,14 +356,14 @@ export function Money() {
     <div className="simple-page">
       <div className="page-head">
         <div>
-          <h1>Money in & out</h1>
+          <h1>Income & expenses</h1>
           <div className="simple-sub">
             {fyLongLabel(fy)} · side projects, income and expenses {filter && <>· showing <b>{filter === '__none' ? 'records without an account' : accounts.find((a) => a.id === filter)?.name}</b> <button className="link" onClick={() => setFilter('')}>show all</button></>}
           </div>
         </div>
         <div className="actions">
-          <button className="primary" onClick={() => setQuick({ dir: 'in', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Money in</button>
-          <button className="primary" onClick={() => setQuick({ dir: 'out', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Money out</button>
+          <button className="primary" onClick={() => setQuick({ dir: 'in', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Income</button>
+          <button className="primary" onClick={() => setQuick({ dir: 'out', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Expense</button>
           <button onClick={() => setMove('')} title="Move money between your own accounts — not income or an expense">
             Move money
           </button>
@@ -376,7 +376,7 @@ export function Money() {
           <table className="pl-table">
             <tbody>
               <tr className="head">
-                <td>Money in</td>
+                <td>Income</td>
                 <td className="num">{fm(pl.inTotal)}</td>
               </tr>
               {pl.inRows.map(([k, v]) => (
@@ -386,7 +386,7 @@ export function Money() {
                 </tr>
               ))}
               <tr className="head">
-                <td>Money out</td>
+                <td>Expenses</td>
                 <td className="num">{pl.outTotal === null ? fm(null) : formatMoney(pl.outTotal.neg())}</td>
               </tr>
               {pl.outRows.map(([k, v]) => (
@@ -563,7 +563,7 @@ export function Money() {
         </div>
       </div>
       <div className="panel tight">
-        <TxnTable id="money-records" rows={tableRows} newDefaults={{ kind: 'income' }} emptyText="No money in or out recorded for this year yet — use + Money in / + Money out above." />
+        <TxnTable id="money-records" rows={tableRows} newDefaults={{ kind: 'income' }} emptyText="No income or expenses recorded for this year yet — use + Income / + Expense above." />
       </div>
       {quick && <QuickMoneyModal direction={quick.dir} accountId={quick.accountId} onClose={() => setQuick(null)} />}
       {editAcct && <AccountModal initial={'id' in editAcct ? editAcct : undefined} defaultType={'id' in editAcct ? undefined : editAcct.type} onClose={() => setEditAcct(null)} />}

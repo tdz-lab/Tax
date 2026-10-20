@@ -11,7 +11,7 @@ export const importsTour: Tour = {
   steps: [
     { title: 'Imports', route: '/imports', target: 'h1', body: 'Bring in CSV statements from brokers, exchanges, wallets, banks, prop firms, accounting exports and rate tables. Everything is processed on this computer.' },
     { title: 'Step 1 — what the file contains', target: 'label:What does the file contain?', body: `- **Income records**, **Expenses / receipts**
-- **Bank statement** (signed amounts: + money in, − money out)
+- **Bank statement** (signed amounts: + deposits, − withdrawals)
 - **Dividends & distributions**
 - **Trades** (shares, ETFs, crypto, futures, options, CFDs, forex)
 - **Wallet / account transfers**

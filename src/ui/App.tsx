@@ -52,13 +52,13 @@ const EXTRA_ROUTES = [
 /** Simple-mode sidebar, grouped like a personal bookkeeping app. */
 const SIMPLE_NAV: { group: string; items: { to: string; label: string; end?: boolean }[] }[] = [
   { group: 'Overview', items: [{ to: '/', label: 'Home', end: true }, { to: '/tax-summary', label: 'Tax summary' }] },
-  { group: 'Money', items: [{ to: '/money', label: 'Money in & out' }, { to: '/documents', label: 'Receipts' }] },
+  { group: 'Money', items: [{ to: '/money', label: 'Income & expenses' }, { to: '/documents', label: 'Receipts' }] },
   { group: 'Trading', items: [{ to: '/add-trades', label: 'Add trades' }, { to: '/trading?tab=ledger', label: 'My trades' }, { to: '/trading?tab=lots', label: 'Holdings' }, { to: '/trading?tab=performance', label: 'Performance' }] },
   { group: 'Records', items: [{ to: '/transactions', label: 'All transactions' }, { to: '/imports', label: 'Import files' }] },
   { group: 'Help', items: [{ to: '/tutorials', label: 'Tutorials' }, { to: '/settings', label: 'Settings & backup' }] }
 ];
 const ADVANCED_EXTRA = [
-  { to: '/money', label: 'Money in & out' },
+  { to: '/money', label: 'Income & expenses' },
   { to: '/add-trades', label: 'Add trades' },
   { to: '/tax-summary', label: 'Tax summary' }
 ];

@@ -10,12 +10,12 @@ import { bumpRevision, invalidateRateCache, writeAudit } from './ledger';
 export const RESET_GROUPS = {
   records: {
     label: 'Transactions & records',
-    detail: 'Every money in / out, trade, move and import (all years), receipts and documents, report and calculation history, assets, logbooks, recurring entries and symbols.',
+    detail: 'Every income and expense record, trade, move and import (all years), receipts and documents, report and calculation history, assets, logbooks, recurring entries and symbols.',
     tables: ['transactions', 'instruments', 'corporateActions', 'documents', 'docBlobs', 'importBatches', 'rawRows', 'reconciliation', 'calcRuns', 'reports', 'recurring', 'drafts', 'assets', 'logEntries', 'inventory']
   },
   accounts: {
     label: 'Accounts',
-    detail: 'Money in, money out, banks and payment accounts, brokers, exchanges and wallets, payers and suppliers.',
+    detail: 'Income and expense accounts, banks and payment accounts, brokers, exchanges and wallets, payers and suppliers.',
     tables: ['accounts', 'counterparties']
   },
   tax: {

@@ -435,7 +435,7 @@ export async function deleteEntity(table: EntityTable, id: string, reason = 'Del
   const db = getDb();
   if (table === 'accounts') {
     const n = await db.transactions.where('accountId').equals(id).count();
-    if (n) throw new Error(`This account has ${n} record(s), so it can't simply be deleted — hide it (Archived), or delete it from Money in & out → Edit → Delete, which can remove its records too.`);
+    if (n) throw new Error(`This account has ${n} record(s), so it can't simply be deleted — hide it (Archived), or delete it from Income & expenses → Edit → Delete, which can remove its records too.`);
   }
   const tbl = (db as any)[table];
   await db.transaction('rw', [tbl, db.audit, db.meta], async () => {

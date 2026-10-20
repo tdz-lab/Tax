@@ -82,8 +82,8 @@ export interface Account {
   payoutCurrency?: string;
   openingBalance?: DecStr;
   openingBalanceDate?: string;
-  /** Simple mode: category used for money in / money out recorded against this account. */
-  /** Simple mode: whether the account is offered for money in, money out, or both (banks, payment accounts). Default from the type. */
+  /** Simple mode: category used for income / expenses recorded against this account. */
+  /** Simple mode: whether the account is offered for income, expenses, or both (banks, payment accounts). Default from the type. */
   moneyUse?: 'in' | 'out' | 'both';
   /** Set when the account was deleted together with its records; kept only so restored records keep their account. */
   deletedAt?: string;

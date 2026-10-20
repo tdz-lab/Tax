@@ -80,7 +80,7 @@ export function AddTrades() {
           </button>
           <button type="button" className="choice-card" onClick={() => setEditor({ kind: 'transfer', side: 'send', accountId: selected || undefined })}>
             <b>Move coins or shares between your accounts</b>
-            <span>e.g. sending crypto from an exchange to your own wallet — not a sale. (For money, use Move money on Money in &amp; out.)</span>
+            <span>e.g. sending crypto from an exchange to your own wallet — not a sale. (For money, use Move money on Income &amp; expenses.)</span>
           </button>
         </div>
         <details style={{ marginTop: 10 }}>

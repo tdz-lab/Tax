@@ -85,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.9.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.9.1.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -117,14 +117,14 @@ The pre-built application is in `dist/`. If it is missing (e.g. you deleted it),
 The switch at the bottom of the sidebar (also *Settings → General*) changes only what you see — the data and the
 calculations are identical.
 
-* **Simple** (default): *Home* (money in, money out, trading gains, estimated refund or tax, a running-totals chart
+* **Simple** (default): *Home* (income, expenses, trading gains, estimated refund or tax, a running-totals chart
   and a short **To do** list with a button to fix each item), *Tax summary* (the figures grouped the way the tax
-  return asks for them, your quick-question answers, and the short PDF), *Money in & out* (a profit-and-loss view and
-  your own accounts — type any name, the first letter is capitalised for you. Accounts are grouped as **Money in**
-  (affiliate or CPA networks, clients…), **Money out** (hosting, software, ad spend…) and **Banks & payment
+  return asks for them, your quick-question answers, and the short PDF), *Income & expenses* (a profit-and-loss view and
+  your own accounts — type any name, the first letter is capitalised for you. Accounts are grouped as **Income**
+  (affiliate or CPA networks, clients…), **Expenses** (hosting, software, ad spend…) and **Banks & payment
   accounts** (used for both). **Move money** (page button, or *Move* on a bank) records money moved between your
   own accounts — from, to, date, amount, note — as one entry that is never income or an expense (stored as two
-  linked own-transfer records, like a transfer in Xero or QuickBooks); + Money in and + Money out only
+  linked own-transfer records, like a transfer in Xero or QuickBooks); + Income and + Expense only
   offer the matching accounts (never trading accounts), and each group scrolls once it has more than about five.
   “What was it for?” lists categories under headings — Marketing & advertising (paid ads, affiliate payouts, native/
   solo ads), Websites & hosting, Software & tools, Contractors & services, Learning & networking, Equipment, Home

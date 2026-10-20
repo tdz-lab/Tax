@@ -72,7 +72,7 @@ export function Home() {
   const total = useLiveQuery(() => getDb().transactions.count(), []);
   const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'income' || t.kind === 'expense' || t.kind === 'fee')).toArray(), [fy], []);
   const h = r ? headline(r) : null;
-  // Same cash-basis totals as the Money in & out page, so the two screens always agree.
+  // Same cash-basis totals as the Income & expenses page, so the two screens always agree.
   const cash = useMemo(() => plRows(txns, new Map()), [txns]);
 
   const series = useMemo<Series[]>(() => {
@@ -87,8 +87,8 @@ export function Home() {
     const out = txns.filter((t) => t.kind !== 'income').map((t) => ({ date: t.date, v: audOf(t, t.amount)?.toNumber() ?? 0 }));
     const trading = [...(r?.disposals ?? []).filter((d) => d.taxClass === 'CGT_EVENT' || d.taxClass === 'REVENUE_TRADING').map((d) => ({ date: d.date, v: d.gainAud ? Number(d.gainAud) : 0 })), ...(r?.derivativeEvents ?? []).filter((e) => e.taxClass === 'CGT_EVENT' || e.taxClass === 'REVENUE_TRADING').map((e) => ({ date: e.date, v: e.netAud ? Number(e.netAud) : 0 }))];
     return [
-      { label: 'Money in', color: '#8cc56b', points: cum(inn) },
-      { label: 'Money out', color: '#47aed6', points: cum(out) },
+      { label: 'Income', color: '#8cc56b', points: cum(inn) },
+      { label: 'Expenses', color: '#47aed6', points: cum(out) },
       { label: 'Trading gains / losses', color: '#f0b429', points: cum(trading) }
     ].filter((s) => s.points.length);
   }, [txns, r, fy]);
@@ -104,7 +104,7 @@ export function Home() {
             <span>Residency, health cover, study loans — takes a minute.</span>
           </button>
           <button className="choice-card" onClick={() => nav('/money')}>
-            <b>2. Add your money accounts</b>
+            <b>2. Add your income &amp; expense accounts</b>
             <span>Affiliate / CPA networks, PayPal, bank accounts — name them anything.</span>
           </button>
           <button className="choice-card" onClick={() => nav('/add-trades')}>
@@ -146,19 +146,19 @@ export function Home() {
           </div>
         </div>
         <div className="actions">
-          <button className="primary" onClick={() => setQuick('in')}>+ Money in</button>
-          <button className="primary" onClick={() => setQuick('out')}>+ Money out</button>
+          <button className="primary" onClick={() => setQuick('in')}>+ Income</button>
+          <button className="primary" onClick={() => setQuick('out')}>+ Expense</button>
           <button onClick={() => nav('/add-trades')}>+ Add trades</button>
         </div>
       </div>
       <div className="bubbles">
         <button className="bubble green" onClick={() => nav('/money')}>
           <span className="big">{money(cash.inTotal === null ? null : cash.inTotal.toString())}</span>
-          <span className="small">Money in</span>
+          <span className="small">Income</span>
         </button>
         <button className="bubble blue" onClick={() => nav('/money')}>
           <span className="big">{money(cash.outTotal === null ? null : cash.outTotal.toString())}</span>
-          <span className="small">Money out</span>
+          <span className="small">Expenses</span>
         </button>
         <button className="bubble amber" onClick={() => nav('/trading?tab=performance')}>
           <span className="big">{money(h?.trading)}</span>

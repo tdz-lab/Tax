@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.9.0.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.9.1.
 
 ## Commands and results
 
@@ -165,11 +165,11 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
 3. **Navigation** — in the Advanced layout, with demonstration data, every main navigation item and every tab renders without page or
    console errors; a dashboard total opens its source records.
 
-3a. **Simple layout** — quick questions saved, a custom income source added and money in recorded, only one
+3a. **Simple layout** — quick questions saved, a custom income source added and income recorded, only one
    Trading sidebar link highlighted at a time, Add trades page, Tax summary without the full report (off by
    default) and the short PDF downloaded (`%PDF-` header). No page or console errors.
 
-3b. **Typing in dialogs** — letter-by-letter typing in the Add account, Money in, quick-questions, classification
+3b. **Typing in dialogs** — letter-by-letter typing in the Add account, Add income, quick-questions, classification
    rule and record dialogs keeps the cursor in the field (this test fails on 1.4.1, where every keystroke moved
    focus to the dialog’s close button).
 3c. **Get exchange rates** — a USD record without a rate is listed; with a stand-in RBA response the panel shows
@@ -177,18 +177,18 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
    server’s rate relay answers.
 3e. **Deleting accounts** — an account without records is deleted; one with records can be hidden (its record
    still shows and counts), shown again, then deleted together with its record (removed from the year).
-3f. **Money in / money out accounts** — names typed in lower case are capitalised; + Money in offers income and
-   bank accounts but not expense accounts, + Money out the reverse; a bank’s **Move** opens a transfer; with
-   seven accounts the Money in list scrolls (at most 265 px high) instead of growing. A prop-firm account is not
-   offered under + Money in, is listed under Trading accounts and can be deleted there.
+3f. **Income / expense accounts** — names typed in lower case are capitalised; + Income offers income and
+   bank accounts but not expense accounts, + Expense the reverse; a bank’s **Move** opens a transfer; with
+   seven accounts the Income list scrolls (at most 265 px high) instead of growing. A prop-firm account is not
+   offered under + Income, is listed under Trading accounts and can be deleted there.
 3g. **Deleting hidden accounts** — a hidden account with a record is deleted together with its record from the
-   hidden list (no “hide” option offered) and then appears nowhere, including the Money in account list.
+   hidden list (no “hide” option offered) and then appears nowhere, including the income account list.
 3h. **Move money** — the window has only from, to, date, amount, currency and note; the move is listed once on
-   Money in & out as “Moved out”, is not in the trade ledger or Add trades, can be edited (both halves change)
+   Income & expenses as “Moved out”, is not in the trade ledger or Add trades, can be edited (both halves change)
    and deleted (both halves go).
 3i. **Start again** — with demo data: ticking Accounts ticks Transactions; the backup button downloads a backup;
    the delete needs `RESET` typed; demo accounts are gone; deleting everything returns to the Welcome screen.
-3j. **Grouped categories** — Money out lists “Paid ads (PPC)”, “Influencer & affiliate payouts”, “Native & solo ads”
+3j. **Grouped categories** — Add an expense lists “Paid ads (PPC)”, “Influencer & affiliate payouts”, “Native & solo ads”
    under a Marketing & advertising heading; a $450 paid-ads expense appears on its own line under Side projects and
    business on the Tax summary.
 3d. **Year selector** — defaults to *Current year*; a picked year stays after reload; *Current year* can be chosen again.
