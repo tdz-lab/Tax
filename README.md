@@ -52,7 +52,8 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 | **Imports** | CSV import wizard with automatic layout detection, column mapping, constants, value mapping, date-format detection (day-first vs month-first), time zones, validation, duplicate detection (source IDs + occurrence-aware fingerprints), preview of totals, atomic commit, rejected-row reporting, rollback, reusable templates, 13 sample files. Wide (one column per currency) and long rate tables. |
 | **Documents** | Local storage of PDF/JPG/PNG/CSV files with SHA-256, linking to any record, missing-evidence views, basic local metadata extraction (no OCR). |
 | **Tax calculations** | Recorded totals, calculated amounts, estimates, items awaiting review and readiness kept separate; traceability to records; rule-set version and warnings; immutable calculation snapshots with history. |
-| **Reports** | Report A (basic annual summary) and Report B (33-section tax-agent report) as PDF, generated offline; CSV exports; print view; report snapshots with SHA-256. |
+| **Simple layout** | Default home screen with four headline figures, a chart and a plain-language to-do list; quick setup questions; custom money accounts (affiliate/CPA networks, payment accounts, banks) with a profit-and-loss view; an *Add trades* page for any broker, exchange or wallet; a tax summary page. |
+| **Reports** | A short “My tax return figures” PDF, Report A (basic annual summary) and Report B (33-section tax-agent report, behind a setting) as PDF, generated offline; CSV exports; print view; report snapshots with SHA-256. |
 | **Reconciliation** | Data-quality summary, statement balance and holding checks, own-transfer matching, duplicate review, unresolved classifications. |
 | **Interactive tutorials** | 30 guided tutorials (≈325 steps) that move through the real app, spotlight each button, field and table, explain it, and wait for you on “Your turn” steps. Detailed coverage of trading (accounts & tax treatment, instruments, shares, crypto, derivatives & options, parcels/lots, performance, prop firms, corporate actions) and currencies (conversion methodology, importing rates, manual rates & overrides, markets/time zones/FY boundaries). Optional practice data, progress tracking, a complete course, and cleanup of practice records. |
 | **Data management** | Automatic saving, crash-recoverable drafts, undo for deletes, audit history, full backups (optionally encrypted), restore (replace or merge), integrity checks, demonstration data. |
@@ -83,7 +84,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.3.1.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.4.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -93,8 +94,9 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
    terminal window open while you use the application.
 5. **New to the app?** Click **Take the 4-minute guided tour** on the welcome screen, or open **Tutorials** in the menu
    (every section also has a **? Tutorial** button at the top right).
-6. On the welcome screen, either load the **demonstration data** (fictional, clearly marked, removable) to explore,
-   or start with your own records:
+6. The app opens in the **Simple** layout (see below). The welcome screen offers three steps — answer a few quick
+   questions, add your money accounts, add your trades — or fictional **demonstration data** to explore.
+   In the **Advanced** layout the same start looks like this:
    1. *Tax & Business → Tax profile*: record your residency for the year.
    2. *Trading & Investments → Accounts*: add each broker/exchange/wallet/prop-firm/bank account and choose its tax
       treatment (investor, trader, or “not yet determined”).
@@ -105,6 +107,20 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 
 The pre-built application is in `dist/`. If it is missing (e.g. you deleted it), the start scripts run
 `npm install` and `npm run build` once (this needs an internet connection).
+
+### Simple and advanced layout
+
+The switch at the bottom of the sidebar (also *Settings → General*) changes only what you see — the data and the
+calculations are identical.
+
+* **Simple** (default): *Home* (money in, money out, trading gains, estimated refund or tax, a running-totals chart
+  and a short **To do** list with a button to fix each item), *Tax summary* (the figures grouped the way the tax
+  return asks for them, your quick-question answers, and the short PDF), *Money in & out* (a profit-and-loss view and
+  your own accounts — type any name: affiliate or CPA networks, PayPal, Stripe, banks; each with **+ In / + Out**),
+  *Add trades* (pick or add a broker, exchange or wallet, then type a trade or import its file), *My trades*,
+  *Holdings*, *Performance*, *All transactions*, *Import files*, *Tutorials* and *Settings*.
+  Technical warnings that do not stop you finishing are kept as **Notes for your accountant** on the Tax summary.
+* **Advanced**: every screen and tab described in this guide. Tutorials always use this layout.
 
 ### Tutorials
 
@@ -231,10 +247,13 @@ See [docs/TAX_METHODOLOGY.md](docs/TAX_METHODOLOGY.md) for exactly how each item
 
 ## 12. Reports
 
-*Reports & PDF Export*:
+*Tax summary* (Simple) and *Reports & PDF Export* (Advanced):
 
-* **Report A — Basic annual tax summary** (compact).
-* **Report B — Full tax-agent report** (33 numbered sections, parcel-level CGT detail, currency conversion ledger,
+* **My tax return figures** (short, one to three pages): items still to fix, then each figure grouped the way the
+  return asks for it, with the estimate. Question numbers are shown only where they were read in an ATO source.
+* **Report A — Basic annual tax summary** (compact; Advanced layout).
+* **Report B — Full tax-agent report** — switched off by default; turn on *Settings → General → Show the full
+  accountant report*. (33 numbered sections, parcel-level CGT detail, currency conversion ledger,
   document index, reconciliation, overrides, audit history, closing balances, questions for the agent).
 * Options: financial year (top bar), included accounts and markets, optional schedules.
 * **CSV exports**: transaction ledger with AUD values and rate provenance; CGT parcel allocations; tax summary lines.

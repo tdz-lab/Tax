@@ -45,6 +45,8 @@ export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   prop_funded: 'Prop-firm funded account',
   bank: 'Bank account',
   cash: 'Cash / other',
+  income_source: 'Income source (affiliate, CPA network, marketplace…)',
+  payment: 'Payment account (PayPal, Stripe, Wise…)',
   other: 'Other'
 };
 

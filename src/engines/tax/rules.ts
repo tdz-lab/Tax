@@ -35,9 +35,9 @@ export interface LitoParams {
 }
 
 /**
- * How a single parameter was checked. Nothing here means "independently verified by a tax
- * professional": the strongest status is a figure read from an ATO page (via search summaries
- * on the date shown, because direct page access was blocked in the build environment).
+ * How a single parameter was checked. Nothing here means "verified by a tax professional": the
+ * strongest status ('verified', v3) is a figure read in an ATO page or a legislation compilation and
+ * compared with the code. Version 2 statuses ('ato_search_summary' etc.) are kept for old snapshots.
  */
 export type CheckStatus =
   | 'verified' // figure read in an official source (ATO page or Federal Register of Legislation compilation)

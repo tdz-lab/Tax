@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.3.0 (after the official-source tax audit).
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.4.0 (simple layout).
 
 ## Commands and results
 
@@ -9,9 +9,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 | --- | --- | --- |
 | `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` (`vitest run`) | 191 unit/integration tests in 11 files | **191 passed, 0 failed** |
-| `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,743 KiB) | **Passed** |
-| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 5 Playwright tests against the production build (incl. every tutorial step) | **5 passed, 0 failed** |
+| `npm test` (`vitest run`) | 197 unit/integration tests in 12 files | **197 passed, 0 failed** |
+| `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,799 KiB) | **Passed** |
+| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 6 Playwright tests against the production build (incl. every tutorial step and the simple layout) | **6 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -110,6 +110,13 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
 ### UI components (`tests/unit/ui.test.tsx`)
 * DataTable pagination, sorting, filtering, page/all selection; decimal input validation keeps strings.
 
+### Simple layout (`tests/unit/simple.test.ts`)
+* Headline figures and the grouped “tax return figures” are read from the engine result (no new calculations) and
+  match it; empty groups are hidden.
+* To-do list: missing setup answers become one “quick questions” item; unclassified records become one
+  plain-language item linking to the fix; a clean year has nothing to do.
+* The short “My tax return figures” PDF is a valid PDF of at most three pages, shorter than the full report.
+
 ### Performance (`tests/unit/performance.test.ts`)
 * 100,000 transactions (shares across 50 instruments, futures, expenses): lot + derivative engines **≈1.7 s**,
   tax-year computation **≈0.27 s**, 25,456 disposals, no incomplete results (measured in the test container).
@@ -118,14 +125,18 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
 1. **Complete workflow** — record residency (autosave) → create an income record → autosaved edit → attach a
    document → **reload; record persists** → create an account → import a broker CSV (template recognised, preview,
    5 created) → **re-import detected as 5 duplicates** → missing USD rates flagged, then fixed by importing rates →
-   correct a record (autosave) → save a calculation snapshot → **download both PDFs** (validated `%PDF-` headers,
+   correct a record (autosave) → save a calculation snapshot → **download the short and basic PDFs, switch on and download the full PDF** (validated `%PDF-` headers,
    names) and the ledger CSV → **export backup** (validated JSON, counts, document included) → **restore into a fresh
    browser profile** (replace, typed confirmation) → records, document link, document hash verification and
    account all present. No page errors.
 2. **Offline** — service worker installs and controls the page; with the network disabled the app reloads, a
    record is added, cached sample files load, a PDF is generated, and the record persists across an offline reload.
-3. **Navigation** — with demonstration data, every main navigation item and every tab renders without page or
+3. **Navigation** — in the Advanced layout, with demonstration data, every main navigation item and every tab renders without page or
    console errors; a dashboard total opens its source records.
+
+3a. **Simple layout** — quick questions saved, a custom income source added and money in recorded, only one
+   Trading sidebar link highlighted at a time, Add trades page, Tax summary without the full report (off by
+   default) and the short PDF downloaded (`%PDF-` header). No page or console errors.
 
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)
 4. **Every tutorial step** — with practice data loaded, all 30 tutorials (318 steps) are run from the Tutorials

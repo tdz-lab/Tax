@@ -12,7 +12,7 @@ import type { AppSettings } from '../domain/types';
 
 export interface ReportOptions {
   fy: FYear;
-  type: 'basic' | 'full';
+  type: 'summary' | 'basic' | 'full';
   accountIds: string[] | null; // null = all
   markets: AssetClass[] | null; // null = all
   schedules: { conversionLedger: boolean; documentIndex: boolean; auditHistory: boolean; lotDetail: boolean };

@@ -56,6 +56,8 @@ export const ACCOUNT_TYPES = [
   'prop_funded',
   'bank',
   'cash',
+  'income_source',
+  'payment',
   'other'
 ] as const;
 export type AccountType = (typeof ACCOUNT_TYPES)[number];
@@ -79,6 +81,9 @@ export interface Account {
   payoutCurrency?: string;
   openingBalance?: DecStr;
   openingBalanceDate?: string;
+  /** Simple mode: category used for money in / money out recorded against this account. */
+  defaultIncomeCategory?: string;
+  defaultExpenseCategory?: string;
   notes?: string;
   archived?: boolean;
   isDemo?: boolean;
@@ -617,7 +622,7 @@ export interface ReportSnapshot {
   id: ID;
   createdAt: string;
   fy: FYear;
-  reportType: 'basic' | 'full' | 'csv';
+  reportType: 'summary' | 'basic' | 'full' | 'csv';
   calculationRunId: ID;
   ruleSetId: string;
   options: Record<string, unknown>;
@@ -679,6 +684,10 @@ export interface AppSettings {
   lastImportAt?: string;
   includeDocumentsInBackup: boolean;
   onboarded: boolean;
+  /** 'simple' shows the plain-language screens; 'advanced' shows every technical page. */
+  uiMode: 'simple' | 'advanced';
+  /** Offer the long accountant report (off by default). */
+  showFullReport: boolean;
 }
 
 export interface RateMethodology {

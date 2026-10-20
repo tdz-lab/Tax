@@ -54,7 +54,7 @@ Times can be typed as 2:30 PM or 14:30.` },
 
 Also here: payer/supplier, tags, **Tax event date** (only if it differs from the transaction date), reconciliation status and notes.` },
     { title: 'Your turn: add a practice expense', target: 'button:Add record', body: 'Fill in: a **Date** in the selected year, a **Description** (e.g. “Practice expense”), **Category** e.g. “Software and subscriptions”, **Amount** e.g. 110. Then click **Add record**. (You can delete practice records at the end.)', tryIt: tryCreated('Fill the fields and click “Add record”.', (t) => t.kind === 'expense') },
-    { title: 'Now it saves automatically', target: '.modal-foot', body: 'After the record is added, every change is saved a moment after you stop typing — “Saved” with the time appears here. **Save now** (or Ctrl+S) forces an immediate save.' },
+    { title: 'Now it saves automatically', target: '.modal-foot', body: 'After the record is added, every change is saved a moment after you stop typing — “Saved” with the time appears here. **Save & close** saves straight away and closes the editor (Ctrl+S saves without closing).' },
     { title: 'Conversion, documents, provenance, history', target: 'text:Supporting documents', body: `Below the form of a saved record:
 - **Historical AUD conversion** — the exact rate, its source and how it was chosen (foreign records)
 - **Supporting documents** — attach a receipt or link an existing document

@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
 import type { ReconciliationItem, Transaction } from '../../domain/types';
@@ -18,7 +19,13 @@ type Tab = 'quality' | 'balances' | 'transfers' | 'duplicates' | 'unclassified';
 
 export function Reconciliation() {
   const { fy } = useApp();
-  const [tab, setTab] = useSessionState<Tab>('recon-tab', 'quality');
+  const [params] = useSearchParams();
+  const [tab, setTab] = useSessionState<Tab>('recon-tab', (params.get('tab') as Tab) || 'quality');
+  const wanted = params.get('tab') as Tab | null;
+  useEffect(() => {
+    if (wanted) setTab(wanted);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted]);
   return (
     <div>
       <div className="page-head">

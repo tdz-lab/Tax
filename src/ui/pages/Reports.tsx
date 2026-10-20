@@ -25,9 +25,9 @@ export function Reports() {
   });
   const [busy, setBusy] = useState<string | null>(null);
   const history = useLiveQuery(() => getDb().reports.orderBy('createdAt').reverse().limit(100).toArray(), [], []) ?? [];
-  const options = (type: 'basic' | 'full'): ReportOptions => ({ fy, type, accountIds: opts.accountIds, markets: opts.markets, schedules: opts.schedules });
+  const options = (type: ReportOptions['type']): ReportOptions => ({ fy, type, accountIds: opts.accountIds, markets: opts.markets, schedules: opts.schedules });
 
-  const pdf = async (type: 'basic' | 'full', mode: 'save' | 'preview') => {
+  const pdf = async (type: ReportOptions['type'], mode: 'save' | 'preview') => {
     setBusy(type);
     const res = await run(() => generatePdfReport(options(type)));
     setBusy(null);
@@ -63,6 +63,18 @@ export function Reports() {
       {r && r.readiness.status === 'incomplete' && <div className="notice warn">This year has blocking data issues — reports will show affected figures as INCOMPLETE. <button className="link" onClick={() => nav('/tax-calc')}>Review issues</button></div>}
       <div className="grid cols-2">
         <div className="panel">
+          <h2>My tax return figures (short)</h2>
+          <p className="muted">One or two pages: what still needs fixing, then each figure grouped the way the tax return asks for it, with the estimate.</p>
+          <div className="row">
+            <button className="primary" disabled={!!busy} onClick={() => pdf('summary', 'save')}>
+              {busy === 'summary' ? 'Generating…' : 'Download PDF'}
+            </button>
+            <button disabled={!!busy} onClick={() => pdf('summary', 'preview')}>
+              Preview
+            </button>
+          </div>
+        </div>
+        <div className="panel">
           <h2>Report A — Basic annual tax summary</h2>
           <p className="muted">Compact summary: profile, income, business, deductions, trading by classification, CGT & discount, dividends, foreign income & withholding, GST/BAS, estimates, unresolved items, data-quality warnings, rule-set version.</p>
           <div className="row">
@@ -74,6 +86,7 @@ export function Reports() {
             </button>
           </div>
         </div>
+        {settings.showFullReport ? (
         <div className="panel">
           <h2>Report B — Full tax-agent report</h2>
           <p className="muted">33 sections including income/expense ledgers, depreciation, CGT calculations with parcel allocations, cost-basis method, every market’s records, prop-firm activity, currency conversion ledger and rate sources, document index, reconciliation, overrides, audit history, closing balances and questions for the agent.</p>
@@ -86,6 +99,12 @@ export function Reports() {
             </button>
           </div>
         </div>
+        ) : (
+          <div className="panel">
+            <h2>Report B — Full tax-agent report</h2>
+            <p className="muted">The long, detailed report (ledgers, parcels, conversions, audit history) is switched off. Turn on “Show the full accountant report” in <button className="link" onClick={() => nav('/settings')}>Settings</button> to use it.</p>
+          </div>
+        )}
       </div>
       <div className="panel">
         <h2>Report options</h2>

@@ -69,6 +69,14 @@ function General() {
   const { settings, updateSettings } = useApp();
   const [tz, setTz] = useState(settings.taxTimeZone);
   return (
+    <>
+      <div className="panel">
+        <h2>Layout and reports</h2>
+        <div className="form-grid">
+          <Select<AppSettings['uiMode']> label="Layout" value={settings.uiMode} onChange={(v) => updateSettings({ uiMode: v })} options={[{ value: 'simple', label: 'Simple (recommended)' }, { value: 'advanced', label: 'Advanced — every screen and tab' }]} hint="Same data either way. Also switchable at the bottom of the sidebar." />
+          <Check label="Show the full accountant report" checked={settings.showFullReport} onChange={(v) => updateSettings({ showFullReport: v })} hint="Adds the long, detailed PDF (ledgers, parcels, conversions, audit history) next to the short “My tax return figures” report." />
+        </div>
+      </div>
     <div className="panel">
       <div className="form-grid">
         <div className="field span-2">
@@ -95,6 +103,7 @@ function General() {
         <TextInput label="Backup reminder after (days)" type="number" value={String(settings.backupReminderDays)} onChange={(v) => updateSettings({ backupReminderDays: Math.max(1, Number(v) || 14) })} />
       </div>
     </div>
+    </>
   );
 }
 

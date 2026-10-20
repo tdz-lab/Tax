@@ -173,8 +173,13 @@ export function TxnEditor({ initial, onClose }: { initial: Draft; onClose: () =>
             {savedId ? 'Delete' : 'Discard'}
           </button>
           {savedId ? (
-            <button className="primary" onClick={() => persist(draft)}>
-              Save now
+            <button
+              className="primary"
+              onClick={async () => {
+                if ((await persist(draft)) !== undefined) onClose();
+              }}
+            >
+              Save &amp; close
             </button>
           ) : (
             <button className="primary" onClick={commitNew} disabled={!kind}>

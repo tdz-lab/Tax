@@ -1,0 +1,337 @@
+/**
+ * Simple mode: money in & money out. Your own named accounts (banks, affiliate / CPA networks, PayPal,
+ * brokers, wallets…), quick entry of money in / out, and a plain profit & loss for the year.
+ */
+import { useMemo, useState } from 'react';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { getDb } from '../../db/schema';
+import { ACCOUNT_TYPE_LABEL } from '../../domain/reference';
+import type { Account, AccountType, Transaction } from '../../domain/types';
+import { D, Decimal, formatMoney } from '../../lib/decimal';
+import { fyLabel, fyLongLabel, fyEnd, fyStart, nowIso } from '../../lib/dates';
+import { newId } from '../../lib/ids';
+import { audOf } from '../../engines/ledger';
+import { reclassifyAll, saveEntity, saveTransaction } from '../../services/ledger';
+import { useApp } from '../AppContext';
+import { useAccounts, useCategories } from '../hooks';
+import { DecimalInput, Modal, Select, TextInput } from '../components/ui';
+import { TxnTable } from '../components/TxnTable';
+
+/** Account kinds offered in simple mode, in plain words. */
+export const SIMPLE_KINDS: { type: AccountType; label: string; hint: string; trading: boolean }[] = [
+  { type: 'income_source', label: 'Income source', hint: 'Affiliate network, CPA network, marketplace, ad network, freelance platform…', trading: false },
+  { type: 'bank', label: 'Bank account', hint: 'Everyday, savings or business bank account', trading: false },
+  { type: 'payment', label: 'Payment account', hint: 'PayPal, Stripe, Wise, Payoneer…', trading: false },
+  { type: 'us_broker', label: 'Share broker', hint: 'Stocks and ETFs — US, Australian or international', trading: true },
+  { type: 'crypto_exchange', label: 'Crypto exchange', hint: 'Binance, Coinbase, Kraken, CoinSpot…', trading: true },
+  { type: 'crypto_wallet', label: 'Crypto wallet', hint: 'MetaMask, Ledger, Phantom…', trading: true },
+  { type: 'futures', label: 'Futures / forex / CFDs', hint: 'Futures, forex or CFD broker', trading: true },
+  { type: 'prop_funded', label: 'Prop-firm account', hint: 'Evaluation or funded trading account', trading: true },
+  { type: 'other', label: 'Something else', hint: 'Anything that doesn’t fit above', trading: false }
+];
+const isTradingType = (t: AccountType) => !['bank', 'cash', 'income_source', 'payment', 'other'].includes(t);
+
+const audAmount = (t: Transaction) => audOf(t, t.amount);
+
+export function AccountModal({ initial, onClose, defaultType = 'income_source' }: { initial?: Account; onClose: (saved?: Account) => void; defaultType?: AccountType }) {
+  const { run, settings } = useApp();
+  const isNew = !initial;
+  const [a, setA] = useState<Partial<Account>>(initial ?? { id: newId('acc'), type: defaultType, currency: settings.defaultCurrency || 'AUD', taxTreatment: isTradingType(defaultType) ? 'unresolved' : 'not_applicable', propStatus: 'none', createdAt: nowIso() });
+  const trading = isTradingType(a.type as AccountType);
+  const save = async () => {
+    const rec = { ...a, name: (a.name ?? '').trim(), institution: (a.institution || a.name || '').trim(), currency: (a.currency || 'AUD').toUpperCase(), taxTreatment: trading ? a.taxTreatment === 'not_applicable' ? 'unresolved' : a.taxTreatment : 'not_applicable', propStatus: a.type === 'prop_funded' ? (a.propStatus === 'none' ? 'funded_live' : a.propStatus) : 'none', updatedAt: nowIso() } as Account;
+    if (!rec.name) return;
+    const out = await run(async () => {
+      const s = await saveEntity('accounts', rec);
+      if (!isNew && initial && (initial.taxTreatment !== rec.taxTreatment || initial.type !== rec.type)) await reclassifyAll('Account type / tax treatment changed');
+      return s;
+    }, { success: isNew ? `Account “${rec.name}” added.` : 'Account saved.' });
+    if (out) onClose(out);
+  };
+  return (
+    <Modal
+      title={isNew ? 'Add an account' : `Edit ${initial!.name}`}
+      onClose={() => onClose()}
+      footer={
+        <>
+          <button onClick={() => onClose()}>Cancel</button>
+          <button className="primary" disabled={!a.name?.trim()} onClick={save}>
+            {isNew ? 'Add account' : 'Save & close'}
+          </button>
+        </>
+      }
+    >
+      <TextInput label="Name (anything you like)" value={a.name} onChange={(v) => setA({ ...a, name: v })} placeholder="e.g. Impact affiliate, MaxBounty, CommBank, Stake US" required />
+      <div style={{ margin: '10px 0 4px', fontWeight: 600 }}>What kind of account is it?</div>
+      <div className="choice-cards">
+        {SIMPLE_KINDS.map((k) => (
+          <button key={k.type} type="button" className="choice-card" aria-pressed={a.type === k.type} style={a.type === k.type ? { borderColor: 'var(--accent)', background: 'var(--accent-weak)' } : undefined} onClick={() => setA({ ...a, type: k.type, taxTreatment: isTradingType(k.type) ? (a.taxTreatment && a.taxTreatment !== 'not_applicable' ? a.taxTreatment : 'unresolved') : 'not_applicable' })}>
+            <b>{k.label}</b>
+            <span>{k.hint}</span>
+          </button>
+        ))}
+      </div>
+      <div className="form-grid" style={{ marginTop: 10 }}>
+        <TextInput label="Currency" value={a.currency} onChange={(v) => setA({ ...a, currency: v.toUpperCase() })} hint="e.g. AUD, USD" />
+        <TextInput label="Company / platform (optional)" value={a.institution} onChange={(v) => setA({ ...a, institution: v })} />
+        {trading && (
+          <Select
+            label="How are gains in this account taxed?"
+            className="span-2"
+            value={a.taxTreatment as 'investor_cgt' | 'business_trader' | 'unresolved'}
+            onChange={(v) => setA({ ...a, taxTreatment: v })}
+            options={[
+              { value: 'investor_cgt', label: 'Investor — capital gains (most people)' },
+              { value: 'business_trader', label: 'Trader running a business — business income' },
+              { value: 'unresolved', label: 'Not sure yet (results are held back until you choose)' }
+            ]}
+            hint="If unsure, most people who buy and hold or trade part-time are investors — check with your accountant."
+          />
+        )}
+        {!trading && (
+          <Select
+            label="Money coming in is usually…"
+            className="span-2"
+            value={a.defaultIncomeCategory ?? (a.type === 'income_source' ? 'business' : '')}
+            onChange={(v) => setA({ ...a, defaultIncomeCategory: v || undefined })}
+            includeEmpty="Ask me each time"
+            options={[
+              { value: 'business', label: 'Side-project / business income' },
+              { value: 'other', label: 'Other income (e.g. a hobby that isn’t a business — ask your accountant)' },
+              { value: 'interest', label: 'Interest' },
+              { value: 'salary', label: 'Salary / wages' }
+            ]}
+          />
+        )}
+      </div>
+      <TextInput label="Notes (optional)" value={a.notes} onChange={(v) => setA({ ...a, notes: v })} />
+    </Modal>
+  );
+}
+
+/** Quick money in / money out entry. */
+export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 'in' | 'out'; accountId?: string; onClose: () => void }) {
+  const { run, fy, settings } = useApp();
+  const accounts = useAccounts().filter((a) => !a.archived);
+  const categories = useCategories().filter((c) => !c.archived && c.type === (direction === 'in' ? 'income' : 'expense'));
+  const today = new Date().toISOString().slice(0, 10);
+  const inYear = today >= fyStart(fy) && today <= fyEnd(fy) ? today : fyEnd(fy);
+  const first = accounts.find((a) => a.id === accountId);
+  const [f, setF] = useState({ accountId: accountId ?? '', date: inYear, description: '', amount: undefined as string | undefined, currency: first?.currency ?? settings.defaultCurrency ?? 'AUD', category: (direction === 'in' ? first?.defaultIncomeCategory ?? (first?.type === 'income_source' ? 'business' : '') : first?.defaultExpenseCategory ?? '') as string });
+  const [newAcct, setNewAcct] = useState(false);
+  const pickAccount = (id: string) => {
+    if (id === '__new') return setNewAcct(true);
+    const a = accounts.find((x) => x.id === id);
+    setF({ ...f, accountId: id, currency: a?.currency ?? f.currency, category: f.category || (direction === 'in' ? a?.defaultIncomeCategory ?? (a?.type === 'income_source' ? 'business' : '') : a?.defaultExpenseCategory ?? '') });
+  };
+  const ok = f.date && f.amount && D(f.amount).gt(0) && f.category;
+  const save = async () => {
+    const cat = categories.find((c) => c.code === f.category);
+    const t = await run(
+      () =>
+        saveTransaction({
+          kind: direction === 'in' ? 'income' : 'expense',
+          date: f.date,
+          description: f.description || cat?.name || (direction === 'in' ? 'Money in' : 'Money out'),
+          amount: f.amount!,
+          currency: f.currency.toUpperCase(),
+          category: f.category,
+          accountId: f.accountId || undefined,
+          isBusiness: cat?.group === 'Business' || undefined,
+          timeZone: settings.taxTimeZone,
+          tags: [],
+          documentIds: [],
+          relatedIds: [],
+          source: 'manual'
+        }),
+      { success: direction === 'in' ? 'Money in recorded.' : 'Money out recorded.' }
+    );
+    if (t) onClose();
+  };
+  if (newAcct) return <AccountModal onClose={(a) => { setNewAcct(false); if (a) setF({ ...f, accountId: a.id, currency: a.currency }); }} />;
+  return (
+    <Modal
+      title={direction === 'in' ? 'Money in' : 'Money out'}
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose}>Cancel</button>
+          <button className="primary" disabled={!ok} onClick={save}>
+            Save
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
+        <Select label="Account" className="span-2" value={f.accountId} includeEmpty="(no account)" onChange={pickAccount} options={[...accounts.map((a) => ({ value: a.id, label: `${a.name} — ${ACCOUNT_TYPE_LABEL[a.type]}` })), { value: '__new', label: '+ Add a new account…' }]} />
+        <TextInput label="Date" type="date" value={f.date} onChange={(v) => setF({ ...f, date: v })} required />
+        <DecimalInput label="Amount" value={f.amount} onChange={(v) => setF({ ...f, amount: v })} required />
+        <TextInput label="Currency" value={f.currency} onChange={(v) => setF({ ...f, currency: v.toUpperCase() })} />
+        <TextInput label="Description" value={f.description} onChange={(v) => setF({ ...f, description: v })} placeholder={direction === 'in' ? 'e.g. October commissions' : 'e.g. Web hosting'} />
+        <Select label={direction === 'in' ? 'What is it?' : 'What was it for?'} className="span-2" value={f.category} includeEmpty="Choose…" required onChange={(v) => setF({ ...f, category: v })} options={categories.map((c) => ({ value: c.code, label: `${c.name} (${c.group})` }))} />
+      </div>
+      {f.currency.toUpperCase() !== 'AUD' && <div className="notice">Amounts in {f.currency.toUpperCase()} are converted to AUD with the exchange rate for the date (import rates under Import files if one is missing).</div>}
+    </Modal>
+  );
+}
+
+export function plRows(txns: Transaction[], catName: Map<string, string>) {
+  const group = (ts: Transaction[]) => {
+    const m = new Map<string, Decimal | null>();
+    for (const t of ts) {
+      const v = audAmount(t);
+      const k = catName.get(t.category) ?? t.category;
+      const cur = m.has(k) ? m.get(k)! : new Decimal(0);
+      m.set(k, cur === null || v === null ? null : cur.plus(v));
+    }
+    return [...m.entries()].sort((a, b) => (b[1]?.toNumber() ?? 0) - (a[1]?.toNumber() ?? 0));
+  };
+  const total = (rows: [string, Decimal | null][]) => rows.reduce<Decimal | null>((a, [, v]) => (a === null || v === null ? null : a.plus(v)), new Decimal(0));
+  const inRows = group(txns.filter((t) => t.kind === 'income'));
+  const outRows = group(txns.filter((t) => t.kind === 'expense' || t.kind === 'fee'));
+  return { inRows, outRows, inTotal: total(inRows), outTotal: total(outRows) };
+}
+const fm = (v: Decimal | null) => (v === null ? 'needs exchange rate' : formatMoney(v));
+
+export function Money() {
+  const { fy } = useApp();
+  const accounts = useAccounts();
+  const categories = useCategories();
+  const [quick, setQuick] = useState<{ dir: 'in' | 'out'; accountId?: string } | null>(null);
+  const [editAcct, setEditAcct] = useState<Account | 'new' | null>(null);
+  const [filter, setFilter] = useState<string>('');
+  const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'income' || t.kind === 'expense' || t.kind === 'fee')).toArray(), [fy], []);
+  const catName = useMemo(() => new Map(categories.map((c) => [c.code, c.name])), [categories]);
+  const shown = filter ? txns.filter((t) => (filter === '__none' ? !t.accountId : t.accountId === filter)) : txns;
+  const pl = useMemo(() => plRows(shown, catName), [shown, catName]);
+  const net = pl.inTotal === null || pl.outTotal === null ? null : pl.inTotal.minus(pl.outTotal);
+  const uncategorised = shown.filter((t) => t.taxClass === 'UNCLASSIFIED' || t.taxClass === 'REVIEW').length;
+  const perAccount = useMemo(() => {
+    const m = new Map<string, { inn: Decimal | null; out: Decimal | null; n: number }>();
+    for (const t of txns) {
+      const k = t.accountId ?? '__none';
+      const e = m.get(k) ?? { inn: new Decimal(0), out: new Decimal(0), n: 0 };
+      const v = audAmount(t);
+      if (t.kind === 'income') e.inn = e.inn === null || v === null ? null : e.inn.plus(v);
+      else e.out = e.out === null || v === null ? null : e.out.plus(v);
+      e.n++;
+      m.set(k, e);
+    }
+    return m;
+  }, [txns]);
+  const moneyAccounts = accounts.filter((a) => !a.archived && (!isTradingType(a.type) || perAccount.has(a.id)));
+  return (
+    <div className="simple-page">
+      <div className="page-head">
+        <div>
+          <h1>Money in & out</h1>
+          <div className="simple-sub">
+            {fyLongLabel(fy)} · side projects, income and expenses {filter && <>· showing <b>{filter === '__none' ? 'records without an account' : accounts.find((a) => a.id === filter)?.name}</b> <button className="link" onClick={() => setFilter('')}>show all</button></>}
+          </div>
+        </div>
+        <div className="actions">
+          <button className="primary" onClick={() => setQuick({ dir: 'in', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Money in</button>
+          <button className="primary" onClick={() => setQuick({ dir: 'out', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Money out</button>
+          <button onClick={() => setEditAcct('new')}>+ Add account</button>
+        </div>
+      </div>
+      <div className="grid cols-2">
+        <div className="panel">
+          <h2>Profit & loss — {fyLabel(fy)}</h2>
+          <table className="pl-table">
+            <tbody>
+              <tr className="head">
+                <td>Money in</td>
+                <td className="num">{fm(pl.inTotal)}</td>
+              </tr>
+              {pl.inRows.map(([k, v]) => (
+                <tr key={'i' + k} className="sub">
+                  <td>{k}</td>
+                  <td className="num">{fm(v)}</td>
+                </tr>
+              ))}
+              <tr className="head">
+                <td>Money out</td>
+                <td className="num">{pl.outTotal === null ? fm(null) : formatMoney(pl.outTotal.neg())}</td>
+              </tr>
+              {pl.outRows.map(([k, v]) => (
+                <tr key={'o' + k} className="sub">
+                  <td>{k}</td>
+                  <td className="num">{v === null ? fm(null) : formatMoney(v.neg())}</td>
+                </tr>
+              ))}
+              <tr className="head">
+                <td>Net result</td>
+                <td className="num">{fm(net)}</td>
+              </tr>
+            </tbody>
+          </table>
+          <p className="faint" style={{ marginTop: 8 }}>
+            Cash basis, in AUD at each date’s exchange rate. Trading results are under Trading. Personal items you mark as private are listed but not deductible.
+          </p>
+        </div>
+        <div>
+          <div className="bubbles" style={{ justifyContent: 'flex-start' }}>
+            <div className="bubble green" style={{ width: 128, height: 128 }}>
+              <div className="big">{shown.length}</div>
+              <div className="small">Records</div>
+            </div>
+            <div className="bubble blue" style={{ width: 128, height: 128 }}>
+              <div className="big">{shown.length - uncategorised}</div>
+              <div className="small">Categorised</div>
+            </div>
+            <div className={`bubble ${uncategorised ? 'amber' : 'slate'}`} style={{ width: 128, height: 128 }}>
+              <div className="big">{uncategorised}</div>
+              <div className="small">Need a category</div>
+            </div>
+          </div>
+          <div className="panel">
+            <h2>Your accounts</h2>
+            {moneyAccounts.length === 0 && <p className="muted">Add the places money comes from or goes to — e.g. your affiliate or CPA networks, PayPal and bank accounts. Give them any name you like.</p>}
+            <table className="pl-table">
+              <tbody>
+                {moneyAccounts.map((a) => {
+                  const e = perAccount.get(a.id);
+                  return (
+                    <tr key={a.id}>
+                      <td>
+                        <button className="link" onClick={() => setFilter(a.id)}>
+                          {a.name}
+                        </button>
+                        <div className="faint" style={{ fontSize: 11 }}>
+                          {ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]} · {e?.n ?? 0} records
+                        </div>
+                      </td>
+                      <td className="num">
+                        <span className="pos">{e ? fm(e.inn) : '$0.00'}</span>
+                        <div className="faint" style={{ fontSize: 11 }}>out {e ? fm(e.out) : '$0.00'}</div>
+                      </td>
+                      <td style={{ width: 120, textAlign: 'right' }}>
+                        <button className="small" onClick={() => setQuick({ dir: 'in', accountId: a.id })}>+ In</button> <button className="small" onClick={() => setQuick({ dir: 'out', accountId: a.id })}>+ Out</button>{' '}
+                        <button className="small link" onClick={() => setEditAcct(a)} aria-label={`Edit ${a.name}`}>Edit</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {perAccount.has('__none') && (
+                  <tr>
+                    <td>
+                      <button className="link" onClick={() => setFilter('__none')}>No account</button>
+                    </td>
+                    <td className="num">{fm(perAccount.get('__none')!.inn)}</td>
+                    <td />
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div className="panel tight">
+        <TxnTable id="money-records" rows={shown} newDefaults={{ kind: 'income' }} emptyText="No money in or out recorded for this year yet — use + Money in / + Money out above." />
+      </div>
+      {quick && <QuickMoneyModal direction={quick.dir} accountId={quick.accountId} onClose={() => setQuick(null)} />}
+      {editAcct && <AccountModal initial={editAcct === 'new' ? undefined : editAcct} onClose={() => setEditAcct(null)} />}
+    </div>
+  );
+}

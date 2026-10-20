@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { HashRouter, NavLink, Route, Routes, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { HashRouter, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../db/schema';
 import { currentFY, fyLabel, listFYs } from '../lib/dates';
@@ -19,10 +19,15 @@ import { Reports } from './pages/Reports';
 import { Reconciliation } from './pages/Reconciliation';
 import { Settings } from './pages/Settings';
 import { Tutorials } from './pages/Tutorials';
-import { TourProvider } from './tour/TourEngine';
+import { Home } from './pages/Home';
+import { Money } from './pages/Money';
+import { AddTrades } from './pages/AddTrades';
+import { TaxSummary } from './pages/TaxSummary';
+import { TourProvider, useTour } from './tour/TourEngine';
 import { TutorialButton } from './tour/TutorialButton';
 import { APP_VERSION } from '../services/settings';
 
+/** Every page, always routable (links from simple screens may open technical pages). */
 export const NAV = [
   { path: '/', label: 'Dashboard', el: <Dashboard /> },
   { path: '/tax', label: 'Tax & Business', el: <TaxBusiness /> },
@@ -36,6 +41,62 @@ export const NAV = [
   { path: '/settings', label: 'Settings & Data', el: <Settings /> },
   { path: '/tutorials', label: 'Tutorials', el: <Tutorials /> }
 ];
+const EXTRA_ROUTES = [
+  { path: '/home', el: <Home /> },
+  { path: '/dashboard', el: <Dashboard /> },
+  { path: '/money', el: <Money /> },
+  { path: '/add-trades', el: <AddTrades /> },
+  { path: '/tax-summary', el: <TaxSummary /> }
+];
+
+/** Simple-mode sidebar, grouped like a personal bookkeeping app. */
+const SIMPLE_NAV: { group: string; items: { to: string; label: string; end?: boolean }[] }[] = [
+  { group: 'Overview', items: [{ to: '/', label: 'Home', end: true }, { to: '/tax-summary', label: 'Tax summary' }] },
+  { group: 'Money', items: [{ to: '/money', label: 'Money in & out' }, { to: '/documents', label: 'Receipts' }] },
+  { group: 'Trading', items: [{ to: '/add-trades', label: 'Add trades' }, { to: '/trading?tab=ledger', label: 'My trades' }, { to: '/trading?tab=lots', label: 'Holdings' }, { to: '/trading?tab=performance', label: 'Performance' }] },
+  { group: 'Records', items: [{ to: '/transactions', label: 'All transactions' }, { to: '/imports', label: 'Import files' }] },
+  { group: 'Help', items: [{ to: '/tutorials', label: 'Tutorials' }, { to: '/settings', label: 'Settings & backup' }] }
+];
+const ADVANCED_EXTRA = [
+  { to: '/money', label: 'Money in & out' },
+  { to: '/add-trades', label: 'Add trades' },
+  { to: '/tax-summary', label: 'Tax summary' }
+];
+
+/** NavLink that also compares the ?tab= value, so the three Trading links aren't all highlighted at once. */
+function SimpleLink({ to, end, children }: { to: string; end?: boolean; children: ReactNode }) {
+  const loc = useLocation();
+  const [path, query] = to.split('?');
+  const want = query ? new URLSearchParams(query).get('tab') : null;
+  const have = new URLSearchParams(loc.search).get('tab') ?? 'ledger';
+  const active = (end ? loc.pathname === path : loc.pathname === path || loc.pathname.startsWith(`${path}/`)) && (!want || want === have);
+  return (
+    <NavLink to={to} end={end} className={() => (active ? 'active' : '')} aria-current={active ? 'page' : undefined}>
+      {children}
+    </NavLink>
+  );
+}
+
+/** Tutorials walk through every technical screen, so they always show the full (advanced) layout. */
+export function useUiMode(): 'simple' | 'advanced' {
+  const { settings } = useApp();
+  const { running } = useTour();
+  return running ? 'advanced' : settings.uiMode;
+}
+
+function ModeSwitch() {
+  const { settings, updateSettings } = useApp();
+  const { running } = useTour();
+  return (
+    <div className="mode-switch" role="group" aria-label="Screen mode">
+      {(['simple', 'advanced'] as const).map((m) => (
+        <button key={m} className={settings.uiMode === m ? 'on' : ''} aria-pressed={settings.uiMode === m} disabled={running} title={running ? 'Tutorials use the advanced layout' : undefined} onClick={() => void updateSettings({ uiMode: m })}>
+          {m === 'simple' ? 'Simple' : 'Advanced'}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 function SaveIndicator() {
   const { saveState, saveError } = useApp();
@@ -162,7 +223,8 @@ function BackupReminder() {
 
 function Shell() {
   const { online } = useApp();
-  const routes = useMemo(() => NAV.map((n) => <Route key={n.path} path={n.path} element={n.el} />), []);
+  const mode = useUiMode();
+  const routes = useMemo(() => [...NAV.filter((n) => n.path !== '/'), ...EXTRA_ROUTES].map((n) => <Route key={n.path} path={n.path} element={n.el} />), []);
   return (
     <div className="app">
       <nav className="sidebar" aria-label="Main navigation">
@@ -170,15 +232,40 @@ function Shell() {
           AU Tax & Trading Ledger
           <small>Local-first · v{APP_VERSION}</small>
         </div>
-        <div className="nav">
-          {NAV.map((n, i) => (
-            <NavLink key={n.path} to={n.path} end={n.path === '/'}>
-              <span className="num">{i < 10 ? i + 1 : '?'}</span>
-              {n.label}
-            </NavLink>
-          ))}
+        {mode === 'simple' ? (
+          <div className="nav simple">
+            {SIMPLE_NAV.map((g) => (
+              <div key={g.group} className="nav-group">
+                <div className="nav-group-title">{g.group}</div>
+                {g.items.map((n) => (
+                  <SimpleLink key={n.to} to={n.to} end={n.end}>
+                    {n.label}
+                  </SimpleLink>
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="nav">
+            {NAV.map((n, i) => (
+              <NavLink key={n.path} to={n.path} end={n.path === '/'}>
+                <span className="num">{i < 10 ? i + 1 : '?'}</span>
+                {n.label}
+              </NavLink>
+            ))}
+            <div className="nav-group-title">Simple screens</div>
+            {ADVANCED_EXTRA.map((n) => (
+              <NavLink key={n.to} to={n.to}>
+                <span className="num" />
+                {n.label}
+              </NavLink>
+            ))}
+          </div>
+        )}
+        <div className="sidebar-foot">
+          <ModeSwitch />
+          Data stays in this browser. No telemetry. Not tax advice.
         </div>
-        <div className="sidebar-foot">Data stays in this browser. No telemetry. Not tax advice.</div>
       </nav>
       <div className="main">
         <header className="topbar">
@@ -194,8 +281,9 @@ function Shell() {
         </header>
         <main className="content">
           <Routes>
+            <Route path="/" element={mode === 'simple' ? <Home /> : <Dashboard />} />
             {routes}
-            <Route path="*" element={<Dashboard />} />
+            <Route path="*" element={mode === 'simple' ? <Home /> : <Dashboard />} />
           </Routes>
         </main>
       </div>

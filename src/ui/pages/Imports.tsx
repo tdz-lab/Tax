@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
 import type { ImportBatch, ImportTarget, ImportTemplate } from '../../domain/types';
@@ -60,7 +61,8 @@ function Wizard() {
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
   const [target, setTarget] = useState<ImportTarget>('trade');
   const [tpl, setTpl] = useState<Omit<ImportTemplate, 'createdAt' | 'updatedAt'> | null>(null);
-  const [accountId, setAccountId] = useState('');
+  const [params] = useSearchParams();
+  const [accountId, setAccountId] = useState(params.get('account') ?? '');
   const [rows, setRows] = useState<PreparedRow[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [rawRows, setRawRows] = useState<Record<string, string>[]>([]);

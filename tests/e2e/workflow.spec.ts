@@ -1,6 +1,6 @@
 /**
  * End-to-end workflow in a real browser (production build served by `vite preview`):
- * create → autosave → reopen → import → duplicates → correct → recalculate → both PDFs →
+ * create → autosave → reopen → import → duplicates → correct → recalculate → the PDFs →
  * backup → restore into a fresh browser profile → verify records, documents and links.
  */
 import { test, expect, type Page, type Download } from '@playwright/test';
@@ -138,10 +138,18 @@ test('complete recordkeeping workflow', async ({ page, browser }) => {
 
   await test.step('generate both PDF reports and a CSV export', async () => {
     await page.goto('./#/reports');
-    const [basic] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PDF' }).first().click()]);
+    const [short] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PDF' }).first().click()]);
+    expect(short.suggestedFilename()).toMatch(/^my-tax-return-figures-FY2024-25-.*\.pdf$/);
+    expect((await readDownload(short)).subarray(0, 5).toString()).toBe('%PDF-');
+    const [basic] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PDF' }).nth(1).click()]);
     expect(basic.suggestedFilename()).toMatch(/^tax-summary-FY2024-25-.*\.pdf$/);
     expect((await readDownload(basic)).subarray(0, 5).toString()).toBe('%PDF-');
-    const [full] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PDF' }).nth(1).click()]);
+    // The full report is off by default and switched on in Settings.
+    await expect(page.getByRole('button', { name: 'Download PDF' })).toHaveCount(2);
+    await page.goto('./#/settings');
+    await page.getByLabel('Show the full accountant report').check();
+    await page.goto('./#/reports');
+    const [full] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download PDF' }).nth(2).click()]);
     expect(full.suggestedFilename()).toMatch(/^tax-agent-report-FY2024-25-.*\.pdf$/);
     const fullBuf = await readDownload(full);
     expect(fullBuf.subarray(0, 5).toString()).toBe('%PDF-');
@@ -200,6 +208,7 @@ test('every navigation item and tab renders without errors (with demonstration d
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
   await page.goto('./');
+  await page.getByRole('group', { name: 'Screen mode' }).getByRole('button', { name: 'Advanced' }).click();
   await page.getByRole('button', { name: 'Load demonstration data' }).click();
   await expect(page.getByText('Demonstration data loaded')).toBeVisible({ timeout: 30_000 });
   await selectFY(page, '2025');
@@ -219,5 +228,67 @@ test('every navigation item and tab renders without errors (with demonstration d
   await page.getByText('Capital gains (gross) / losses').click();
   await expect(page.getByRole('dialog', { name: /Source records/ })).toBeVisible();
   await expect(page.getByRole('dialog').getByRole('row')).not.toHaveCount(1);
+  expect(errors).toEqual([]);
+});
+
+test('simple mode: home, money accounts, add trades and tax summary', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  await noSavePicker(page);
+  await page.goto('./');
+  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  await selectFY(page, '2025');
+  const nav = page.getByRole('navigation', { name: 'Main navigation' });
+
+  await test.step('quick questions', async () => {
+    await page.getByRole('button', { name: /Answer a few quick questions/ }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.getByRole('button', { name: 'Yes, all year' }).first().click();
+    await dlg.getByRole('button', { name: 'Yes, all year' }).nth(1).click();
+    await dlg.getByRole('button', { name: 'No', exact: true }).nth(0).click();
+    await dlg.getByRole('button', { name: 'No', exact: true }).nth(1).click();
+    await dlg.getByRole('button', { name: 'No', exact: true }).nth(2).click();
+    await dlg.getByRole('button', { name: 'Save answers' }).click();
+    await expect(dlg).toHaveCount(0);
+  });
+
+  await test.step('add a custom income source and record money in', async () => {
+    await nav.getByRole('link', { name: 'Money in & out' }).click();
+    await page.getByRole('button', { name: '+ Add account' }).click();
+    const dlg = page.getByRole('dialog');
+    await dlg.getByLabel('Name (anything you like)').fill('My CPA Network');
+    await dlg.getByRole('button', { name: 'Add account' }).click();
+    await expect(dlg).toHaveCount(0);
+    await expect(page.getByText('My CPA Network').first()).toBeVisible();
+    await page.getByRole('button', { name: '+ Money in' }).first().click();
+    const q = page.getByRole('dialog');
+    await q.getByLabel('Date').fill('2024-10-01');
+    await q.getByLabel('Amount').fill('1200');
+    await q.getByLabel('Description').fill('E2E affiliate payout');
+    if (!(await q.getByLabel('What is it?').inputValue())) await q.getByLabel('What is it?').selectOption({ index: 1 });
+    await q.getByRole('button', { name: 'Save', exact: true }).click();
+    await expect(page.getByRole('cell', { name: 'E2E affiliate payout' })).toBeVisible();
+  });
+
+  await test.step('trading links highlight one at a time', async () => {
+    await nav.getByRole('link', { name: 'Holdings' }).click();
+    await expect(nav.getByRole('link', { name: 'Holdings' })).toHaveClass(/active/);
+    await expect(nav.getByRole('link', { name: 'My trades' })).not.toHaveClass(/active/);
+    await nav.getByRole('link', { name: 'Add trades' }).click();
+    await expect(page.getByRole('heading', { name: 'Add trades' })).toBeVisible();
+  });
+
+  await test.step('tax summary and the short PDF', async () => {
+    await nav.getByRole('link', { name: 'Tax summary' }).click();
+    await expect(page.getByRole('heading', { name: /Tax summary/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /Full accountant pack/ })).toHaveCount(0);
+    const [pdf] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'My tax return figures (PDF)', exact: true }).click()]);
+    expect(pdf.suggestedFilename()).toMatch(/^my-tax-return-figures-FY2024-25-.*\.pdf$/);
+    expect((await readDownload(pdf)).subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  await nav.getByRole('link', { name: 'Home' }).click();
+  await expect(page.getByRole('heading', { name: /Your FY2024/ })).toBeVisible();
   expect(errors).toEqual([]);
 });

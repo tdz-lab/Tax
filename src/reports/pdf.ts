@@ -11,6 +11,7 @@ import type { AssetClass, Transaction } from '../domain/types';
 import { QUALITY_LABEL } from '../engines/reconciliation/quality';
 import { ruleSetFor } from '../engines/tax/rules';
 import type { TaxLine } from '../engines/tax/taxEngine';
+import { returnFigures } from '../engines/tax/simpleFigures';
 import { audOf, grossOf } from '../engines/ledger';
 import type { ReportContext } from './reportData';
 
@@ -248,8 +249,42 @@ export function buildBasicReport(ctx: ReportContext): Blob {
   b.para(rs ? `${rs.id} (${rs.status}). Sources: ${rs.sources.join('; ')}. Not implemented: ${rs.notImplemented.join('; ')}.` : 'No rule set available for this year.');
   if (rs?.checks?.length) {
     const weak = rs.checks.filter((c) => c.status === 'conflicting' || c.status === 'unverified');
-    b.para(`Parameter checks (${rs.checks[0].checkedOn}): figures were compared with ATO web pages through search summaries, not read directly and not reviewed by a registered tax agent. ${weak.length ? `Unconfirmed or conflicting: ${weak.map((c) => `${c.param} (${c.status}${c.note ? ': ' + c.note : ''})`).join('; ')}.` : 'No parameter is marked unconfirmed for this year.'}`);
+    const verified = rs.checks.filter((c) => c.status === 'verified').length;
+    b.para(`Parameter checks (${rs.checks[0].checkedOn}): ${verified} of ${rs.checks.length} parameters were read in an official source (ATO pages or Federal Register of Legislation) and compared with the application; none has been reviewed by a registered tax agent. ${weak.length ? `Unconfirmed or conflicting: ${weak.map((c) => `${c.param} (${c.status}${c.note ? ': ' + c.note : ''})`).join('; ')}.` : 'No parameter is marked unconfirmed for this year.'} Details: docs/TAX_RULE_VERIFICATION.md.`);
   }
+  return b.finish();
+}
+
+/**
+ * "My tax return figures" — the short (1–2 page) default report: the totals to enter in myTax / give
+ * your accountant, plus anything still to fix. No ledgers or technical schedules.
+ */
+export function buildSummaryReport(ctx: ReportContext): Blob {
+  const r = ctx.result;
+  const b = new Builder(ctx, 'My tax return figures');
+  const d = b.doc;
+  d.setFont('helvetica', 'bold').setFontSize(18).text(pdfSafe('My tax return figures'), b.margin, b.y);
+  b.y += 20;
+  d.setFont('helvetica', 'normal').setFontSize(11).text(pdfSafe(`${fyLabel(ctx.options.fy)} (${fyLongLabel(ctx.options.fy)})${ctx.user?.fullName ? ` - ${ctx.user.fullName}` : ''}`), b.margin, b.y);
+  b.y += 14;
+  d.setFontSize(8.5).setTextColor(110).text(pdfSafe(`Prepared ${formatInstant(ctx.generatedAt, ctx.settings.taxTimeZone)} from your own records. An estimate to help you fill in your return - not an ATO form and not tax advice.`), b.margin, b.y);
+  d.setTextColor(0);
+  b.y += 16;
+  const blocking = r.issues.filter((i) => i.severity === 'blocking');
+  if (blocking.length || r.estimateStatus !== 'estimate') {
+    b.heading('Still to fix before relying on these figures', false);
+    for (const i of blocking.slice(0, 8)) b.para(`- ${i.message}`, 8.5, 140);
+    if (r.estimateStatus === 'not_available') b.para('- The tax estimate is not available: answer the quick questions (residency etc.) for this year.', 8.5, 140);
+  }
+  for (const g of returnFigures(r)) {
+    b.heading(g.title, false);
+    b.table(
+      ['Item', 'Amount (AUD)', 'Where it goes'],
+      g.rows.map((x) => [x.strong ? { content: pdfSafe(x.label), styles: { fontStyle: 'bold' } } : x.label, x.amount === null ? 'INCOMPLETE' : x.amount === undefined ? '' : x.strong ? { content: formatMoney(x.amount), styles: { fontStyle: 'bold', halign: 'right' } } : formatMoney(x.amount), x.where ?? '']),
+      { money: [1], widths: { 0: 230, 1: 90 } }
+    );
+  }
+  b.para('Question numbers are shown only where they were confirmed in ATO guidance (question 11 Dividends, question 13 Partnerships and trusts, question 18 Capital gains labels H, A and V, M1/M2 Medicare). The ATO calculates your actual tax when you lodge. Keep your records and receipts - the ATO asks for records to be kept for 5 years.', 7.5, 110);
   return b.finish();
 }
 
