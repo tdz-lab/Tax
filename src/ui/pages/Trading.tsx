@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
-import { ACCOUNT_TYPE_LABEL, ASSET_CLASS_LABEL, TAX_CLASS_INFO, TREATMENT_LABEL } from '../../domain/reference';
+import { ACCOUNT_TYPE_LABEL, ASSET_CLASS_LABEL, TAX_CLASS_INFO, TREATMENT_LABEL, isTradingAccountType } from '../../domain/reference';
+import { isMoneyMove } from '../../services/moves';
 import { ACCOUNT_TYPES, ASSET_CLASSES, type Account, type AssetClass, type CorporateAction, type Instrument } from '../../domain/types';
 import { D, formatMoney, formatQty } from '../../lib/decimal';
 import { formatDate, fyLabel, nowIso } from '../../lib/dates';
@@ -65,6 +66,8 @@ function LedgerTab() {
   const rows = txns.filter(
     (t) =>
       t.status === 'active' &&
+      // Money moved between banks / payment accounts is not trading (moves into or out of a broker still show).
+      !(isMoneyMove(t) && !isTradingAccountType(accounts.find((a) => a.id === t.accountId)?.type ?? 'bank')) &&
       (t.kind === 'trade' || t.kind === 'transfer' || t.kind === 'cash' || t.kind === 'adjustment' || (t.instrumentId && t.kind === 'income') || (t.accountId && accounts.find((a) => a.id === t.accountId)?.type.startsWith('prop'))) &&
       (!f.accountId || t.accountId === f.accountId) &&
       (!f.assetClass || inst.get(t.instrumentId ?? '')?.assetClass === f.assetClass)

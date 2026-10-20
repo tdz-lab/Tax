@@ -464,8 +464,8 @@ test('money in and money out accounts are kept apart; banks are offered for both
 
   // Banks can move money to another of your accounts (a transfer, not income or an expense).
   await banks.getByRole('button', { name: 'Move' }).click();
-  await expect(page.getByRole('dialog').getByLabel('Record type')).toHaveValue('transfer');
-  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).last().click();
+  await expect(page.getByRole('dialog', { name: 'Move money' })).toBeVisible();
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
 
   // Trading accounts (e.g. a prop-firm account) are not offered for money in/out, but are listed — and deletable.
   await page.getByRole('button', { name: '+ Add account' }).click();
@@ -515,4 +515,56 @@ test('hidden accounts with records can be deleted and then disappear everywhere'
   await expect(page.getByText(/Hidden accounts/)).toHaveCount(0);
   await page.getByRole('button', { name: '+ Money in' }).first().click();
   expect((await page.getByRole('dialog').getByLabel('Account').locator('option').allTextContents()).join('|')).not.toContain('Old network');
+});
+
+test('move money between banks: one simple entry, not a trade, not income or an expense', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('./');
+  await selectFY(page, '2025');
+  await page.goto('./#/money');
+  const banks = page.getByRole('region', { name: 'Banks & payment accounts' });
+  for (const n of ['NAB', 'CommBank']) {
+    await banks.getByRole('button', { name: '+ Add' }).click();
+    const d = page.getByRole('dialog');
+    await d.getByLabel('Name (anything you like)').fill(n);
+    await d.getByRole('button', { name: 'Add account' }).click();
+    await expect(d).toHaveCount(0);
+  }
+  await page.getByRole('row', { name: /NAB/ }).getByRole('button', { name: 'Move' }).click();
+  let d = page.getByRole('dialog', { name: 'Move money' });
+  await expect(d.getByLabel('From')).toHaveValue(/.+/);
+  // Only the essentials: from, to, date, amount, currency, note.
+  await expect(d.locator('input, select')).toHaveCount(6);
+  await d.getByLabel('To').selectOption({ label: 'CommBank' });
+  await d.getByLabel('Date').fill('2024-10-01');
+  await d.getByLabel('Amount').fill('500');
+  await d.getByLabel('Note (optional)').fill('savings');
+  await d.getByRole('button', { name: 'Move money' }).click();
+  await expect(page.getByText('Money moved.')).toBeVisible();
+  // Listed once on Money in & out, not counted in the totals.
+  await expect(page.getByRole('cell', { name: 'Moved to CommBank — savings' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Moved out' })).toBeVisible();
+  await expect(page.getByRole('cell', { name: 'Moved from NAB — savings' })).toHaveCount(0);
+  await expect(page.locator('.bubble').first()).toContainText('0');
+  // Not a trade.
+  await page.goto('./#/trading?tab=ledger');
+  await expect(page.getByRole('cell', { name: /Moved to CommBank/ })).toHaveCount(0);
+  await page.goto('./#/add-trades');
+  await expect(page.getByRole('cell', { name: /Moved to CommBank/ })).toHaveCount(0);
+  // Clicking it opens the same simple window to edit; delete removes both sides.
+  await page.goto('./#/money');
+  await page.getByRole('cell', { name: 'Moved to CommBank — savings' }).click();
+  d = page.getByRole('dialog', { name: 'Edit money move' });
+  await expect(d.getByLabel('Amount')).toHaveValue('500');
+  await d.getByLabel('Amount').fill('650');
+  await d.getByRole('button', { name: 'Save' }).click();
+  await page.goto('./#/transactions');
+  await expect(page.getByRole('cell', { name: 'Moved from NAB — savings' })).toBeVisible();
+  await expect(page.getByRole('row', { name: /Moved from NAB/ })).toContainText('650');
+  await page.getByRole('cell', { name: 'Moved from NAB — savings' }).click();
+  await page.getByRole('dialog', { name: 'Edit money move' }).getByRole('button', { name: 'Delete' }).click();
+  await page.getByRole('dialog', { name: 'Delete this move?' }).getByRole('button', { name: 'Delete' }).click();
+  await expect(page.getByRole('cell', { name: /Moved (to|from)/ })).toHaveCount(0);
+  expect(errors).toEqual([]);
 });

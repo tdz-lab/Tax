@@ -6,7 +6,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
-import { ACCOUNT_TYPE_LABEL } from '../../domain/reference';
+import { ACCOUNT_TYPE_LABEL, isTradingAccountType } from '../../domain/reference';
+import { isMoneyMove } from '../../services/moves';
 import type { Account, Transaction } from '../../domain/types';
 import { useApp } from '../AppContext';
 import { useAccounts } from '../hooks';
@@ -14,7 +15,7 @@ import { TxnEditor } from '../components/TxnEditor';
 import { TxnTable } from '../components/TxnTable';
 import { AccountModal } from './Money';
 
-const TRADING_TYPES = new Set(['au_broker', 'us_broker', 'intl_broker', 'crypto_exchange', 'crypto_wallet', 'futures', 'forex', 'cfd', 'options', 'prop_evaluation', 'prop_funded']);
+
 
 const SOURCE_HELP: { title: string; text: string }[] = [
   { title: 'Share brokers', text: 'Download the trade history / transaction report as CSV (e.g. “Trade confirmations” or “Activity statement”).' },
@@ -26,12 +27,12 @@ const SOURCE_HELP: { title: string; text: string }[] = [
 export function AddTrades() {
   const { fy } = useApp();
   const nav = useNavigate();
-  const accounts = useAccounts().filter((a) => !a.archived && TRADING_TYPES.has(a.type));
+  const accounts = useAccounts().filter((a) => !a.archived && isTradingAccountType(a.type));
   const [selected, setSelected] = useState<string>('');
   const [adding, setAdding] = useState(false);
   const [editor, setEditor] = useState<Partial<Transaction> | null>(null);
   const source = accounts.find((a) => a.id === selected);
-  const trades = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'trade' || t.kind === 'transfer') && (!selected || t.accountId === selected)).toArray(), [fy, selected], []) ?? [];
+  const trades = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'trade' || (t.kind === 'transfer' && !isMoneyMove(t))) && (!selected || t.accountId === selected)).toArray(), [fy, selected], []) ?? [];
   const counts = useLiveQuery(async () => {
     const m = new Map<string, number>();
     await getDb().transactions.filter((t) => t.status === 'active' && t.kind === 'trade').each((t) => t.accountId && m.set(t.accountId, (m.get(t.accountId) ?? 0) + 1));
@@ -78,8 +79,8 @@ export function AddTrades() {
             <span>Upload the CSV you downloaded{source ? ` from ${source.name}` : ''}. Duplicates are skipped automatically if you import the same file twice.</span>
           </button>
           <button type="button" className="choice-card" onClick={() => setEditor({ kind: 'transfer', side: 'send', accountId: selected || undefined })}>
-            <b>Move between your accounts</b>
-            <span>e.g. sending crypto from an exchange to your own wallet — not a sale.</span>
+            <b>Move coins or shares between your accounts</b>
+            <span>e.g. sending crypto from an exchange to your own wallet — not a sale. (For money, use Move money on Money in &amp; out.)</span>
           </button>
         </div>
         <details style={{ marginTop: 10 }}>

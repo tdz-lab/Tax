@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
-import { ACCOUNT_TYPE_LABEL } from '../../domain/reference';
+import { ACCOUNT_TYPE_LABEL, isTradingAccountType } from '../../domain/reference';
 import type { Account, AccountType, Transaction } from '../../domain/types';
 import { D, Decimal, formatMoney } from '../../lib/decimal';
 import { fyLabel, fyLongLabel, fyEnd, fyStart, nowIso } from '../../lib/dates';
@@ -16,7 +16,8 @@ import { useApp } from '../AppContext';
 import { useAccounts, useCategories } from '../hooks';
 import { DecimalInput, Modal, Select, TextInput } from '../components/ui';
 import { TxnTable } from '../components/TxnTable';
-import { TxnEditor } from '../components/TxnEditor';
+import { MoveMoneyModal } from '../components/MoveMoneyModal';
+import { isMoneyMove } from '../../services/moves';
 
 /** Account kinds offered in simple mode, in plain words. */
 export const SIMPLE_KINDS: { type: AccountType; label: string; hint: string; trading: boolean }[] = [
@@ -31,7 +32,7 @@ export const SIMPLE_KINDS: { type: AccountType; label: string; hint: string; tra
   { type: 'prop_funded', label: 'Prop-firm account', hint: 'Evaluation or funded trading account', trading: true },
   { type: 'other', label: 'Something else', hint: 'Anything that doesn’t fit above', trading: false }
 ];
-const isTradingType = (t: AccountType) => !['bank', 'cash', 'income_source', 'expense_source', 'payment', 'other'].includes(t);
+const isTradingType = isTradingAccountType;
 
 /** Whether an account is offered for money in, money out or both (banks and payment accounts are both). */
 export function moneyUseOf(a: Pick<Account, 'type' | 'moneyUse'>): 'in' | 'out' | 'both' {
@@ -325,6 +326,12 @@ export function Money() {
   const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'income' || t.kind === 'expense' || t.kind === 'fee')).toArray(), [fy], []);
   const catName = useMemo(() => new Map(categories.map((c) => [c.code, c.name])), [categories]);
   const shown = filter ? txns.filter((t) => (filter === '__none' ? !t.accountId : t.accountId === filter)) : txns;
+  // Money moved between your own accounts: listed with the records, never counted as money in or out.
+  const moves = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && isMoneyMove(t)).toArray(), [fy], []);
+  const tableRows = useMemo(() => {
+    const ms = moves.filter((t) => (filter ? t.accountId === filter : t.side === 'send'));
+    return [...shown, ...ms];
+  }, [shown, moves, filter]);
   const pl = useMemo(() => plRows(shown, catName), [shown, catName]);
   const net = pl.inTotal === null || pl.outTotal === null ? null : pl.inTotal.minus(pl.outTotal);
   const uncategorised = shown.filter((t) => t.taxClass === 'UNCLASSIFIED' || t.taxClass === 'REVIEW').length;
@@ -556,12 +563,12 @@ export function Money() {
         </div>
       </div>
       <div className="panel tight">
-        <TxnTable id="money-records" rows={shown} newDefaults={{ kind: 'income' }} emptyText="No money in or out recorded for this year yet — use + Money in / + Money out above." />
+        <TxnTable id="money-records" rows={tableRows} newDefaults={{ kind: 'income' }} emptyText="No money in or out recorded for this year yet — use + Money in / + Money out above." />
       </div>
       {quick && <QuickMoneyModal direction={quick.dir} accountId={quick.accountId} onClose={() => setQuick(null)} />}
       {editAcct && <AccountModal initial={'id' in editAcct ? editAcct : undefined} defaultType={'id' in editAcct ? undefined : editAcct.type} onClose={() => setEditAcct(null)} />}
       {delAcct && <DeleteAccountModal account={delAcct} onBack={() => setDelAcct(null)} onDone={() => setDelAcct(null)} />}
-      {move !== null && <TxnEditor initial={{ kind: 'transfer', side: 'send', accountId: move || undefined, currency: accounts.find((a) => a.id === move)?.currency }} onClose={() => setMove(null)} />}
+      {move !== null && <MoveMoneyModal fromAccountId={move || undefined} onClose={() => setMove(null)} />}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.6.1.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.7.0.
 
 ## Commands and results
 
@@ -9,9 +9,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 | --- | --- | --- |
 | `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` (`vitest run`) | 211 unit/integration tests in 13 files | **211 passed, 0 failed** |
+| `npm test` (`vitest run`) | 214 unit/integration tests in 14 files | **214 passed, 0 failed** |
 | `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,812 KiB) | **Passed** |
-| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 12 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs, fetching rates, deleting and separating accounts) | **12 passed, 0 failed** |
+| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 13 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs, fetching rates, deleting and separating accounts, moving money) | **13 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -132,6 +132,12 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
   removes the rates. Common coins get their CoinGecko id.
 * Not tested against the live RBA or CoinGecko services (they could not be reached from the test environment).
 
+### Moving money (`tests/unit/moves.test.ts`)
+* A move creates two linked own-transfer records (out of one account, into the other) with the note in both
+  descriptions; no income, deductions or data-quality issues result.
+* Editing from either record updates both halves (amount and direction); deleting removes both; the same account
+  twice or a zero amount is refused.
+
 ### Performance (`tests/unit/performance.test.ts`)
 * 100,000 transactions (shares across 50 instruments, futures, expenses): lot + derivative engines **≈1.7 s**,
   tax-year computation **≈0.27 s**, 25,456 disposals, no incomplete results (measured in the test container).
@@ -167,6 +173,9 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
    offered under + Money in, is listed under Trading accounts and can be deleted there.
 3g. **Deleting hidden accounts** — a hidden account with a record is deleted together with its record from the
    hidden list (no “hide” option offered) and then appears nowhere, including the Money in account list.
+3h. **Move money** — the window has only from, to, date, amount, currency and note; the move is listed once on
+   Money in & out as “Moved out”, is not in the trade ledger or Add trades, can be edited (both halves change)
+   and deleted (both halves go).
 3d. **Year selector** — defaults to *Current year*; a picked year stays after reload; *Current year* can be chosen again.
 
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)

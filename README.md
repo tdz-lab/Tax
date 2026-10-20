@@ -85,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.6.1.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.7.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -122,7 +122,9 @@ calculations are identical.
   return asks for them, your quick-question answers, and the short PDF), *Money in & out* (a profit-and-loss view and
   your own accounts — type any name, the first letter is capitalised for you. Accounts are grouped as **Money in**
   (affiliate or CPA networks, clients…), **Money out** (hosting, software, ad spend…) and **Banks & payment
-  accounts** (used for both, and for **Move money** between your own accounts); + Money in and + Money out only
+  accounts** (used for both). **Move money** (page button, or *Move* on a bank) records money moved between your
+  own accounts — from, to, date, amount, note — as one entry that is never income or an expense (stored as two
+  linked own-transfer records, like a transfer in Xero or QuickBooks); + Money in and + Money out only
   offer the matching accounts (never trading accounts), and each group scrolls once it has more than about five.
   Brokers, exchanges, wallets and prop-firm accounts are listed under **Trading accounts** (Edit / Delete there);
   **Edit → Delete…** removes an account with no records, or hides it, or deletes it together with its records,

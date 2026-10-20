@@ -12,6 +12,8 @@ import { useAccounts, useCategories, useInstruments } from '../hooks';
 import { DataTable, type Column } from './DataTable';
 import { Confirm, Modal, Select, TextInput } from './ui';
 import { TxnEditor } from './TxnEditor';
+import { MoveMoneyModal } from './MoveMoneyModal';
+import { isMoneyMove } from '../../services/moves';
 
 export function TxnTable({ id, rows, newDefaults, showAccount = true, emptyText, extraToolbar }: { id: string; rows: Transaction[]; newDefaults?: Partial<Transaction>; showAccount?: boolean; emptyText?: string; extraToolbar?: React.ReactNode }) {
   const { settings, run, toast } = useApp();
@@ -19,6 +21,7 @@ export function TxnTable({ id, rows, newDefaults, showAccount = true, emptyText,
   const instruments = useInstruments();
   const categories = useCategories();
   const [editing, setEditing] = useState<Partial<Transaction> | null>(null);
+  const [moving, setMoving] = useState<Transaction | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState(false);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -32,7 +35,7 @@ export function TxnTable({ id, rows, newDefaults, showAccount = true, emptyText,
   const columns: Column<Transaction>[] = [
     { key: 'date', header: 'Date', render: (t) => formatDate(t.date, settings.dateFormat), sortValue: (t) => t.occurredAt, searchValue: (t) => t.date, width: 86 },
     { key: 'time', header: 'Time', render: (t) => (t.time ? formatInstant(t.occurredAt, t.timeZone, { timeFormat: settings.timeFormat }).split(' ').slice(1).join(' ') : ''), hidden: true, searchValue: () => '' },
-    { key: 'kind', header: 'Type', render: (t) => (t.side ? SIDE_LABEL[t.side] : KIND_LABEL[t.kind]), sortValue: (t) => t.side ?? t.kind },
+    { key: 'kind', header: 'Type', render: (t) => (isMoneyMove(t) ? (t.side === 'send' ? 'Moved out' : 'Moved in') : t.side ? SIDE_LABEL[t.side] : KIND_LABEL[t.kind]), sortValue: (t) => t.side ?? t.kind },
     { key: 'description', header: 'Description', render: (t) => <>{t.description || <span className="faint">(none)</span>}{t.isDemo && <span className="badge"> demo</span>}</>, sortValue: (t) => t.description.toLowerCase(), searchValue: (t) => `${t.description} ${t.counterparty ?? ''} ${t.notes ?? ''} ${t.sourceId ?? ''} ${t.tags.join(' ')}` },
     { key: 'category', header: 'Category', render: (t) => catName.get(t.category) ?? t.category, sortValue: (t) => t.category },
     ...(showAccount ? [{ key: 'account', header: 'Account', render: (t: Transaction) => acct.get(t.accountId ?? '')?.name ?? '', sortValue: (t: Transaction) => acct.get(t.accountId ?? '')?.name ?? '', searchValue: (t: Transaction) => acct.get(t.accountId ?? '')?.name ?? '' }] : []),
@@ -65,7 +68,7 @@ export function TxnTable({ id, rows, newDefaults, showAccount = true, emptyText,
         rows={rows}
         columns={columns}
         rowKey={(t) => t.id}
-        onRowClick={(t) => setEditing(t)}
+        onRowClick={(t) => (isMoneyMove(t) ? setMoving(t) : setEditing(t))}
         selectable
         selected={selected}
         onSelectedChange={setSelected}
@@ -92,6 +95,7 @@ export function TxnTable({ id, rows, newDefaults, showAccount = true, emptyText,
         }
       />
       {editing && <TxnEditor initial={editing} onClose={() => setEditing(null)} />}
+      {moving && <MoveMoneyModal record={moving} onClose={() => setMoving(null)} />}
       {bulk && <BulkEdit ids={ids} onClose={() => { setBulk(false); setSelected(new Set()); }} />}
       {confirmDel && (
         <Confirm
