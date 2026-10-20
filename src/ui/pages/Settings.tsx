@@ -19,6 +19,7 @@ import { invalidateCalcCache } from '../../services/calc';
 import { loadDemoData, removeDemoData } from '../../services/demo';
 import { purgeDeleted, runIntegrityChecks, type IntegrityReport } from '../../services/integrity';
 import { storageEstimate, requestPersistentStorage } from '../../services/bootstrap';
+import { ALL_RESET_GROUPS, RESET_GROUPS, normaliseGroups, resetData, type ResetGroup } from '../../services/reset';
 import { useApp } from '../AppContext';
 import { useAccounts, useCategories } from '../hooks';
 import { DataTable } from '../components/DataTable';
@@ -56,7 +57,12 @@ export function Settings() {
       {tab === 'rates' && <RatesTab />}
       {tab === 'categories' && <CategoriesTab />}
       {tab === 'templates' && <TemplatesTab />}
-      {tab === 'backup' && <BackupTab />}
+      {tab === 'backup' && (
+        <>
+          <BackupTab />
+          <ResetPanel />
+        </>
+      )}
       {tab === 'health' && <HealthTab />}
       {tab === 'rules' && <RulesTab />}
       {tab === 'connectors' && <ConnectorsTab />}
@@ -76,6 +82,9 @@ function General() {
           <Select<AppSettings['uiMode']> label="Layout" value={settings.uiMode} onChange={(v) => updateSettings({ uiMode: v })} options={[{ value: 'simple', label: 'Simple (recommended)' }, { value: 'advanced', label: 'Advanced — every screen and tab' }]} hint="Same data either way. Also switchable at the bottom of the sidebar." />
           <Check label="Show the full accountant report" checked={settings.showFullReport} onChange={(v) => updateSettings({ showFullReport: v })} hint="Adds the long, detailed PDF (ledgers, parcels, conversions, audit history) next to the short “My tax return figures” report." />
         </div>
+        <p className="faint" style={{ marginTop: 8 }}>
+          Want to delete your data and start again? See <a href="#/settings?tab=backup">Backup &amp; restore → Start again</a>.
+        </p>
       </div>
     <div className="panel">
       <div className="form-grid">
@@ -422,6 +431,100 @@ function TemplatesTab() {
         ]}
       />
       <p className="faint" style={{ padding: '0 12px 8px' }}>Create templates from the Imports wizard (“Save mapping as template”). Files whose headers match a template are recognised automatically.</p>
+    </div>
+  );
+}
+
+/** Start again: delete chosen groups of data (or everything), with a backup offered first. */
+function ResetPanel() {
+  const { settings, run, toast } = useApp();
+  const [picked, setPicked] = useState<Set<ResetGroup>>(new Set());
+  const [confirm, setConfirm] = useState(false);
+  const [backedUp, setBackedUp] = useState(false);
+  const groups = normaliseGroups([...picked]);
+  const everything = groups.length === ALL_RESET_GROUPS.length;
+  const toggle = (g: ResetGroup, on: boolean) => {
+    const next = new Set(picked);
+    if (on) next.add(g);
+    else {
+      next.delete(g);
+      if (g === 'records') next.delete('accounts');
+    }
+    setPicked(next);
+  };
+  const backup = async () => {
+    const res = await run(() => exportBackup({ includeDocuments: settings.includeDocumentsInBackup }));
+    if (!res) return;
+    const how = await saveFile(res.blob, res.fileName, 'Backup', { 'application/json': ['.json'] });
+    if (how !== 'cancelled') {
+      setBackedUp(true);
+      toast(`Backup ${how === 'saved' ? 'saved' : 'downloaded'}: ${res.fileName}`);
+    }
+  };
+  const go = async () => {
+    setConfirm(false);
+    const n = await run(() => resetData(groups));
+    if (n === undefined) return;
+    if (groups.includes('settings') || everything) {
+      window.location.hash = '#/';
+      window.location.reload();
+      return;
+    }
+    setPicked(new Set());
+    toast(`Done — ${n} item${n === 1 ? '' : 's'} deleted.`);
+  };
+  return (
+    <div className="panel" id="reset">
+      <h2>Start again (reset)</h2>
+      <p className="muted">Permanently delete data from this browser. This can’t be undone — only a backup can bring it back.</p>
+      <div className="reset-groups">
+        {ALL_RESET_GROUPS.map((g) => {
+          const forced = g === 'records' && picked.has('accounts');
+          return (
+            <Check
+              key={g}
+              label={<b>{RESET_GROUPS[g].label}</b>}
+              checked={groups.includes(g)}
+              onChange={(v) => (forced ? undefined : toggle(g, v))}
+              hint={
+                <>
+                  {RESET_GROUPS[g].detail}
+                  {forced && <> <i>(Included because accounts are deleted.)</i></>}
+                </>
+              }
+            />
+          );
+        })}
+      </div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <button onClick={() => setPicked(everything ? new Set() : new Set(ALL_RESET_GROUPS))}>{everything ? 'Clear selection' : 'Select everything'}</button>
+        <button onClick={backup}>{backedUp ? 'Backup downloaded ✓' : 'Download a backup first'}</button>
+        <button className="danger" disabled={!groups.length} onClick={() => setConfirm(true)}>
+          {everything ? 'Delete everything…' : 'Delete selected…'}
+        </button>
+      </div>
+      {confirm && (
+        <Confirm
+          title={everything ? 'Delete everything?' : 'Delete the selected data?'}
+          danger
+          requireText="RESET"
+          confirmLabel={everything ? 'Delete everything' : 'Delete'}
+          message={
+            <>
+              <p>This permanently deletes:</p>
+              <ul>
+                {groups.map((g) => (
+                  <li key={g}>{RESET_GROUPS[g].label}</li>
+                ))}
+              </ul>
+              {everything && <p>The app will be as on first launch.</p>}
+              {!backedUp && <p style={{ color: 'var(--bad)' }}>You haven’t downloaded a backup in this step.</p>}
+            </>
+          }
+          onCancel={() => setConfirm(false)}
+          onConfirm={go}
+        />
+      )}
     </div>
   );
 }

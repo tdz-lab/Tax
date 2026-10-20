@@ -85,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.7.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.8.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -185,6 +185,10 @@ Browser storage can be cleared by you, by the browser under storage pressure, or
   present; existing records win and conflicts are counted) or **Replace** (erase current data first — you must
   type `RESTORE`). Older backups are migrated to the current schema automatically; backups from a newer version
   are refused.
+* **Start again (reset):** *Settings → Backup & restore → Start again*. Tick what to delete — transactions &
+  records, accounts (which also deletes their records), tax answers & profile, exchange rates, settings/categories/
+  templates — or **Select everything** to return the app to its first-launch state. A backup button is right there,
+  and you must type `RESET`. This is permanent; only a backup can bring the data back.
 
 ## 8. Importing CSV files
 

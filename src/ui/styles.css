@@ -262,3 +262,4 @@ table.dt tfoot td { font-weight: 600; background: var(--panel-2); }
 .acct-scroll { max-height: 265px; overflow-y: auto; }
 .acct-actions { text-align: right; white-space: nowrap; width: 110px; }
 .acct-actions.both { white-space: normal; width: 118px; line-height: 2; }
+.reset-groups { display: grid; gap: 6px; }

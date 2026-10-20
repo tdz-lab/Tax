@@ -86,16 +86,25 @@ class Builder {
     this.y += lines.length * 11 + 12;
     d.setTextColor(0);
   }
-  heading(text: string, numbered = true) {
-    this.ensure(40);
+  /**
+   * Section heading. Clear space above it and a tight rule below, so it reads as the title of what follows (not a
+   * caption of the table above). `keepWith` is the space the content after it needs on the same page — a heading is
+   * never left alone at the foot of a page, and short tables are not split.
+   */
+  heading(text: string, numbered = true, keepWith = 60) {
+    const top = this.margin + 20;
+    if (this.y > top) this.y += 12;
+    this.ensure(Math.min(keepWith, this.height - 50 - top - 20) + 20);
     if (numbered) this.section++;
     this.doc.setFont('helvetica', 'bold').setFontSize(12).setTextColor(20, 40, 80);
     this.doc.text(pdfSafe(numbered ? `${this.section}. ${text}` : text), this.margin, this.y);
-    this.doc.setDrawColor(200).line(this.margin, this.y + 4, this.width - this.margin, this.y + 4);
-    this.doc.setTextColor(0).setFont('helvetica', 'normal');
-    this.y += 16;
+    this.doc.setDrawColor(20, 40, 80).setLineWidth(0.8).line(this.margin, this.y + 4, this.width - this.margin, this.y + 4);
+    this.doc.setLineWidth(0.2).setDrawColor(200).setTextColor(0).setFont('helvetica', 'normal');
+    this.y += 12;
   }
   para(text: string, size = 8.5, color = 60) {
+    // Measure at the size the text is drawn at (measuring at the previous heading's size wrapped lines too early).
+    this.doc.setFont('helvetica', 'normal').setFontSize(size);
     const lines = this.doc.splitTextToSize(pdfSafe(text), this.width - this.margin * 2);
     this.ensure(lines.length * (size + 2) + 4);
     this.doc.setFontSize(size).setTextColor(color).text(lines, this.margin, this.y);
@@ -272,12 +281,12 @@ export function buildSummaryReport(ctx: ReportContext): Blob {
   b.y += 16;
   const blocking = r.issues.filter((i) => i.severity === 'blocking');
   if (blocking.length || r.estimateStatus !== 'estimate') {
-    b.heading('Still to fix before relying on these figures', false);
-    for (const i of blocking.slice(0, 8)) b.para(`- ${i.message}`, 8.5, 140);
-    if (r.estimateStatus === 'not_available') b.para('- The tax estimate is not available: answer the quick questions (residency etc.) for this year.', 8.5, 140);
+    b.heading('Still to fix before relying on these figures', false, 40);
+    for (const i of blocking.slice(0, 8)) b.para(`- ${i.message}`, 8.5, 70);
+    if (r.estimateStatus === 'not_available') b.para('- The tax estimate is not available: answer the quick questions (residency etc.) for this year.', 8.5, 70);
   }
   for (const g of returnFigures(r)) {
-    b.heading(g.title, false);
+    b.heading(g.title, false, 18 * (g.rows.length + 1) + 6);
     b.table(
       ['Item', 'Amount (AUD)', 'Where it goes'],
       g.rows.map((x) => [x.strong ? { content: pdfSafe(x.label), styles: { fontStyle: 'bold' } } : x.label, x.amount === null ? 'INCOMPLETE' : x.amount === undefined ? '' : x.strong ? { content: formatMoney(x.amount), styles: { fontStyle: 'bold', halign: 'right' } } : formatMoney(x.amount), x.where ?? '']),

@@ -568,3 +568,36 @@ test('move money between banks: one simple entry, not a trade, not income or an 
   await expect(page.getByRole('cell', { name: /Moved (to|from)/ })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('start again: delete selected data, then everything', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await noSavePicker(page);
+  await page.goto('./');
+  await page.getByRole('button', { name: /Just exploring/ }).click();
+  await expect(page.getByText(/Demonstration data loaded/)).toBeVisible({ timeout: 30_000 });
+  await page.goto('./#/settings?tab=backup');
+  const panel = page.locator('#reset');
+  // Ticking accounts also ticks transactions.
+  await panel.getByLabel('Accounts').check();
+  await expect(panel.getByLabel('Transactions & records')).toBeChecked();
+  const [backup] = await Promise.all([page.waitForEvent('download'), panel.getByRole('button', { name: 'Download a backup first' }).click()]);
+  expect(backup.suggestedFilename()).toMatch(/\.json$/);
+  await panel.getByRole('button', { name: 'Delete selected…' }).click();
+  const d = page.getByRole('dialog', { name: 'Delete the selected data?' });
+  await expect(d.getByRole('button', { name: 'Delete', exact: true })).toBeDisabled();
+  await d.getByLabel('Confirmation text').fill('RESET');
+  await d.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByText(/Done — \d+ items? deleted/)).toBeVisible();
+  await page.goto('./#/money');
+  await expect(page.getByRole('button', { name: /^Edit DEMO/ })).toHaveCount(0);
+  // Everything: back to the welcome screen with default settings.
+  await page.goto('./#/settings?tab=backup');
+  await page.locator('#reset').getByRole('button', { name: 'Select everything' }).click();
+  await page.locator('#reset').getByRole('button', { name: 'Delete everything…' }).click();
+  const d2 = page.getByRole('dialog', { name: 'Delete everything?' });
+  await d2.getByLabel('Confirmation text').fill('RESET');
+  await d2.getByRole('button', { name: 'Delete everything' }).click();
+  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible({ timeout: 15_000 });
+  expect(errors).toEqual([]);
+});
