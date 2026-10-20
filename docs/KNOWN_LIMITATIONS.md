@@ -17,37 +17,37 @@ stated restrictions; **Flagged** items are recorded and shown for review but not
 
 ## Tax calculations not performed (flagged in results)
 
-See [VALIDATION_STATUS.md](VALIDATION_STATUS.md) for the year-by-year evidence behind every rate and threshold.
+See [TAX_RULE_VERIFICATION.md](TAX_RULE_VERIFICATION.md) for the official-source evidence behind every rate and
+threshold, and [VALIDATION_STATUS.md](VALIDATION_STATUS.md) for the summary.
 
-* HELP / study-loan repayments for years other than 2025–26 (thresholds not confirmed or conflicting), and for
-  foreign or part-year residents (overseas repayment obligations).
-* Medicare levy **family reduction amount** between the family lower threshold and the family limit (formula not
-  sourced) — the single levy is shown as an upper bound and flagged. Family thresholds for 2022–23 and 2026–27, and
-  the lower family threshold for 2023–24 and 2024–25, are not confirmed.
-* Medicare levy low-income reduction for 2026–27 (thresholds not yet confirmed).
-* Medicare levy exemption for the non-resident part of a part-year resident’s year; MLS for part-year residents and
-  for people with a Medicare exemption; MLS for a family member whose own income is at or below the Medicare
-  low-income threshold.
-* Seniors and pensioners tax offset (SAPTO) and its Medicare thresholds; private health insurance rebate adjustments.
-* Working-holiday-maker rates outside 2024–25 and 2025–26; part-year residency for 2026–27. WHM estimates treat all
-  income as working holiday income.
-* Non-resident CGT limits to taxable Australian property (non-residents get no discount and a warning).
+* **2026–27 Medicare levy low-income and family reductions** — thresholds not yet published; the full 2% is shown
+  and flagged. The married-person MLS own-income test is not applied for 2026–27 either.
+* **Any CGT event on or after 1 July 2027** — enacted reforms (deemed sale and reacquisition on 1 July 2027; 0%
+  discount for individuals except new residential dwellings) are not implemented; results are blocked.
+* HELP/study-loan repayments for foreign or part-year residents (overseas repayment obligations).
+* Medicare levy: exemption days for foreign-resident periods of part-year residents; the interaction of a half
+  exemption with the family reduction; super lump sums excluded from Medicare/MLS income (2022–23, 2023–24).
+* Seniors and pensioners tax offset (SAPTO) and its Medicare thresholds; private health insurance rebate
+  adjustments; the LITO cap for people under 18.
+* Working-holiday-maker estimates treat all income as working holiday income (the law taxes other income above it).
+* CGT discount apportionment for foreign or temporary residency periods (s 115-105, 115-115); non-resident CGT
+  limits to taxable Australian property (non-residents get no discount and a warning).
 * Non-commercial loss rules (Div 35); reduction of tax losses by net exempt income.
 * Trading-stock (Div 70) closing-stock valuation for share traders; the stock register is informational.
 * Foreign income tax offset: deductions related to foreign income are assumed nil in the limit calculation and
   foreign capital gains are not identified; excess foreign tax is not carried forward (it cannot be).
 * Forex realisation gains/losses on foreign currency balances (Div 775) — flagged only; the limited balance election
-  can be recorded but its $250,000 balance test is not checked.
-* Indexation of cost base for assets acquired before 21 September 1999 — flagged only (CPI factors not entered).
-* Franking credit 45-day holding period: only a recorded-trades heuristic (no last-in-first-out parcel rule, no
-  options/short positions); franking credits are never removed automatically.
+  can be recorded but its $250,000 balance test is not checked; the election out of the 12-month rule is not
+  supported.
+* Indexation of cost base for assets acquired at or before 21 September 1999 — flagged only (CPI factors not entered).
+* Franking credit holding period: only a recorded-trades heuristic (no last-in-first-out parcel rule, no 90-day rule
+  for preference shares, no options/short positions, no related-payments test); franking credits are never removed
+  automatically.
 * Wash sales: a 30-day review flag, not a rule; losses are still included.
-* Personal-use asset exemption (crypto/NFTs) — not applied.
-* Employment termination payments (concessional components).
-* Small business income tax offset and other offsets (other offsets can be entered manually).
+* Personal-use asset exemption (crypto/NFTs) — not applied; collectables are not distinguished.
+* Employment termination payments (concessional components); small business income tax offset; temporary full
+  expensing, the small business pool and the car limit; other offsets can be entered manually.
 * Put-option exercise; written-option close-out and assignment adjustments; non-rollover takeovers.
-* Foreign-resident rates for 2024–25 had conflicting ATO search results (Stage 3 figures used and flagged);
-  2022–23, 2023–24 and 2026–27 foreign-resident rates are not independently confirmed (used with a warning).
 
 ## Partial
 
@@ -83,9 +83,9 @@ See [VALIDATION_STATUS.md](VALIDATION_STATUS.md) for the year-by-year evidence b
 
 ## Testing limitations
 
-* Expected tax results in tests are hand-calculated from ATO rate tables and formulas, checked against an
-  independent integer-cents reference implementation and ATO worked examples. The ATO figures themselves were read
-  through web-search summaries (direct access to ato.gov.au was blocked). Nothing has been reviewed by a registered
-  tax agent.
+* Expected tax results in tests come from official ATO tables, ATO worked examples and the legislation, checked with
+  reference implementations written separately from the application. The ATO pages were read as printed copies
+  supplied by the user (ato.gov.au refuses connections from the build server); some printouts were partial.
+  Nothing has been reviewed by a registered tax agent or compared with ATO lodgment software.
 * Browser tests run in Chromium only; Firefox and Safari were not tested.
 * Performance was measured in a containerised CI-like environment, not on end-user hardware.

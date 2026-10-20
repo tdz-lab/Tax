@@ -6,12 +6,13 @@
  *   1. A separate reference implementation in integer cents, written from the ATO's published
  *      "$base plus Xc for each $1 over $threshold" table form (typed in below from the ATO text),
  *      is compared with the engine's marginal-bracket calculation across boundaries.
- *   2. ATO worked examples (part-year threshold, FITO limit) are used verbatim.
+ *   2. ATO worked examples (MLS, HELP) and the statutory part-year formula are used verbatim.
  *   3. Other expected values are hand calculations shown in comments.
  *
- * These tests prove the code matches the figures as we read them from ATO pages (via web-search
- * summaries, 20 Oct 2026). They do not prove the figures themselves are complete or current, and
- * have not been reviewed by a registered tax agent.
+ * v1.3 (20 Oct 2026): the tables below were re-checked against the ATO pages (printed copies supplied
+ * by the user) and the legislation — see docs/TAX_RULE_VERIFICATION.md and tax-official.test.ts.
+ * Passing tests does not prove the application is complete or tax-ready, and nothing here has been
+ * reviewed by a registered tax agent.
  */
 import { describe, expect, it } from 'vitest';
 import { D } from '../../src/lib/decimal';
@@ -70,32 +71,37 @@ describe('resident and foreign scales vs an independent integer-cents reference'
 });
 
 describe('rule-set provenance', () => {
-  it('no current built-in rule set claims to be verified, and every one records its parameter checks', () => {
+  it('no rule set as a whole claims to be verified; every one records a check for each core parameter', () => {
     for (const fy of [2023, 2024, 2025, 2026, 2027]) {
       const rs = ruleSetFor(fy)!;
-      expect(rs.version).toBe(2);
+      expect(rs.version).toBe(3);
       expect(rs.status).not.toBe('verified');
-      for (const p of ['residentBrackets', 'nonResidentBrackets', 'medicareLowIncome', 'mls', 'help', 'partYearThreshold', 'whmBrackets', 'lito']) {
+      for (const p of ['residentBrackets', 'nonResidentBrackets', 'medicareLowIncome', 'medicareFamily', 'mls', 'help', 'partYearThreshold', 'whmBrackets', 'lito', 'medicareLevyRate', 'cgtDiscountIndividual']) {
         expect(rs.checks?.some((c) => c.param === p), `${rs.id} check for ${p}`).toBe(true);
+      }
+      // A "verified" check must name the source, the section/table and the source's date.
+      for (const c of rs.checks!.filter((x) => x.status === 'verified')) {
+        expect(c.source.length, `${rs.id} ${c.param} source`).toBeGreaterThan(10);
+        expect(c.section, `${rs.id} ${c.param} section`).toBeTruthy();
+        expect(c.sourceDate, `${rs.id} ${c.param} date`).toBeTruthy();
       }
     }
   });
-  it('version 1 rule sets remain available for earlier snapshots and point to their replacement', () => {
+  it('earlier rule-set versions remain available for snapshots and point to their replacement', () => {
     expect(ruleSetById('AU-IND-FY2025-v1')?.supersededBy).toBe('AU-IND-FY2025-v2');
+    expect(ruleSetById('AU-IND-FY2025-v2')?.supersededBy).toBe('AU-IND-FY2025-v3');
   });
-  it('conflicting or unconfirmed parameters are null rather than guessed', () => {
-    expect(ruleSetFor(2025)!.help).toBeNull(); // 2024–25 table not confirmed
-    expect(ruleSetFor(2027)!.help).toBeNull(); // conflicting minimum threshold
-    expect(ruleSetFor(2027)!.medicareLowIncome).toBeNull();
-    expect(ruleSetFor(2024)!.whmBrackets).toBeNull();
-    expect(ruleSetFor(2027)!.partYearThreshold).toBeNull();
-    expect(ruleSetFor(2025)!.checks!.find((c) => c.param === 'nonResidentBrackets')!.status).toBe('conflicting');
+  it('parameters that no official source published yet are null rather than guessed', () => {
+    expect(ruleSetFor(2027)!.medicareLowIncome).toBeNull(); // 2026–27 not published
+    expect(ruleSetFor(2027)!.medicareFamily).toBeNull();
+    expect(ruleSetFor(2027)!.checks!.find((c) => c.param === 'medicareLowIncome')!.status).toBe('unverified');
+    for (const fy of [2023, 2024, 2025, 2026, 2027]) expect(ruleSetFor(fy)!.checks!.some((c) => c.status === 'conflicting')).toBe(false);
   });
 });
 
-describe('part-year residents (ATO worked examples)', () => {
+describe('part-year residents (Income Tax Rates Act s 20)', () => {
   const rs = ruleSetFor(2026)!;
-  it('threshold = $13,464 + $4,736 × months / 12 — ATO examples: 3 months $14,648; 6 months $15,832', () => {
+  it('threshold = (TFT − $4,736) + $4,736 × months / 12 (ITRA s 20): 3 months $14,648; 6 months $15,832', () => {
     expect(partYearThreshold(rs, 3)!.toFixed(2)).toBe('14648.00');
     expect(partYearThreshold(rs, 6)!.toFixed(2)).toBe('15832.00');
     expect(partYearThreshold(rs, 12)!.toFixed(2)).toBe('18200.00');
@@ -105,8 +111,8 @@ describe('part-year residents (ATO worked examples)', () => {
   it('tax at $50,000 with 6 months residency, 2025–26: 16% × (45,000 − 15,832) + 30% × 5,000 = $6,166.88', () => {
     expect(taxOnBrackets(D(50000), partYearBrackets(rs, 6)!).toFixed(2)).toBe('6166.88');
   });
-  it('is not available where the formula is unconfirmed (2026–27)', () => {
-    expect(partYearBrackets(ruleSetFor(2027)!, 6)).toBeNull();
+  it('2026–27 uses the same statutory formula (ITRA s 20, comp. 66) with the 15% first rate: 6 months, $50,000 → 15% × 29,168 + 30% × 5,000 = $5,875.20', () => {
+    expect(taxOnBrackets(D(50000), partYearBrackets(ruleSetFor(2027)!, 6)!).toFixed(2)).toBe('5875.20');
   });
 });
 
@@ -125,10 +131,22 @@ describe('Medicare levy — single and family thresholds (2025–26)', () => {
     expect(medicareLevy(D(40000), rs, 'none', fam(15000, 2)).levy!.toFixed(2)).toBe('0.00'); // 55,000 ≤ 55,914
     expect(medicareLevy(D(50000), rs, 'none', fam(null, 2, false)).levy!.toFixed(2)).toBe('0.00'); // sole parent
   });
-  it('between the family thresholds the reduction is not calculated: single levy as an upper bound, flagged', () => {
-    const r = medicareLevy(D(40000), rs, 'none', fam(10000)); // 50,000: above 47,238, within 59,047
-    expect(r.levy!.toFixed(2)).toBe('800.00');
-    expect(r.reliable).toBe(false);
+  it('s 8(2) family reduction between the thresholds (spouse not liable): 2% × 47,238 − 8% × (50,000 − 47,238) = 723.80 off 800 → $76.20', () => {
+    const r = medicareLevy(D(40000), rs, 'none', fam(10000));
+    expect(r.levy!.toFixed(2)).toBe('76.20');
+    expect(r.reliable).toBe(true);
+  });
+  it('s 8(3) apportionment when the spouse is also liable: TI 29,000 + spouse 29,000 → reduction 83.80 × ½ = 41.90 off the s 7 levy 98.90 → $57.00', () => {
+    // s 7(2): levy ≤ 10% × (29,000 − 28,011) = 98.90 (less than 2% × 29,000 = 580).
+    const r = medicareLevy(D(29000), rs, 'none', fam(29000));
+    expect(r.levy!.toFixed(2)).toBe('57.00');
+  });
+  it('a negative spouse taxable income counts as $0 (ATO M1 worksheet 1)', () => {
+    expect(medicareLevy(D(40000), rs, 'none', fam(-5000)).levy!.toFixed(2)).toBe(medicareLevy(D(40000), rs, 'none', fam(0)).levy!.toFixed(2));
+  });
+  it('the reduction reaches nil at 1.25 × the threshold (ATO family limit $59,047)', () => {
+    expect(medicareLevy(D(40000), rs, 'none', fam(19047)).levy!.toFixed(2)).toBe('799.96'); // FI 59,047: reduction 0.04
+    expect(medicareLevy(D(40000), rs, 'none', fam(19048)).levy!.toFixed(2)).toBe('800.00');
   });
   it('above the family limit ($59,047 + $5,423 per child) the single result stands', () => {
     const r = medicareLevy(D(40000), rs, 'none', fam(30000));
@@ -163,9 +181,12 @@ describe('Medicare levy surcharge', () => {
     expect(mlsAmount(rs, { ...f, ti: D(120000) }).amount!.toFixed(2)).toBe('1200.00'); // 210,000 > 202,000
     expect(mlsAmount(rs, { ...f, ti: D(120000), children: 7 }).amount!.toFixed(2)).toBe('0.00'); // 202,000 + 9,000 = 211,000
   });
-  it('family member at or below the Medicare low-income threshold: not calculated (rule not sourced)', () => {
-    const r = mlsAmount(rs, { ...base, family: true, spouseMlsIncome: D(250000), ti: D(20000) });
-    expect(r.amount).toBeNull();
+  it('married person whose own income for MLS purposes does not exceed $28,011 pays no MLS (Medicare Levy Act s 8D(3)(c))', () => {
+    expect(mlsAmount(rs, { ...base, family: true, spouse: true, spouseMlsIncome: D(250000), ti: D(28011) }).amount!.toFixed(2)).toBe('0.00');
+    expect(mlsAmount(rs, { ...base, family: true, spouse: true, spouseMlsIncome: D(250000), ti: D(28012) }).amount!.toFixed(2)).toBe('350.15'); // 1.25% × 28,012
+  });
+  it('ATO example (2026–27, Tom): taxable income $90,000 + RFB $27,000 = $117,000 → tier 1 → $1,170', () => {
+    expect(mlsAmount(ruleSetFor(2027)!, { ...base, ti: D(90000), rfb: D(27000) }).amount!.toFixed(2)).toBe('1170.00');
   });
   it('days in income year (leap year 2023–24 has 366)', () => {
     expect(daysInFy(2024)).toBe(366);
@@ -186,17 +207,34 @@ describe('compulsory study-loan repayment (2025–26 marginal system)', () => {
     expect(h(179286)).toBe('17928.60');
     expect(h(200000)).toBe('20000.00');
   });
-  it('not calculated where the schedule is unconfirmed', () => {
-    expect(helpRepayment(ruleSetFor(2025)!, D(100000))).toBeNull();
-    expect(helpRepayment(ruleSetFor(2027)!, D(100000))).toBeNull();
+  it('ATO examples 2026–27: Christina $86,380 → $2,527.80; Barry $137,064 → $10,276.99; Priya $254,780 → $25,478', () => {
+    const r27 = ruleSetFor(2027)!;
+    expect(helpRepayment(r27, D(86380))!.toFixed(2)).toBe('2527.80');
+    expect(helpRepayment(r27, D(137064))!.toFixed(2)).toBe('10276.99');
+    expect(helpRepayment(r27, D(254780))!.toFixed(2)).toBe('25478.00');
+    expect(helpRepayment(r27, D(69528))!.toFixed(2)).toBe('0.00');
+    expect(helpRepayment(r27, D(186050))!.toFixed(2)).toBe('18604.61'); // 9,028 + 17% × 56,333
+    expect(helpRepayment(r27, D(186051))!.toFixed(2)).toBe('18605.10'); // 10% of total
+  });
+  it('ATO example 2024–25 (Branson): repayment income $99,736 is in the 5.5% band; percentage tables at their boundaries', () => {
+    // The ATO page states "$99,736 × 5.5% = $5,485.52", but 99,736 × 0.055 = 5,485.48 exactly
+    // (4,986.80 + 498.68). The band and rate are taken from the ATO table; the ATO's product is an
+    // arithmetic slip, documented in docs/TAX_RULE_VERIFICATION.md.
+    expect(99736 * 55).toBe(5485480); // independent integer check (cents × 1000)
+    expect(helpRepayment(ruleSetFor(2025)!, D(99736))!.toFixed(2)).toBe('5485.48');
+    expect(helpRepayment(ruleSetFor(2025)!, D(54434))!.toFixed(2)).toBe('0.00');
+    expect(helpRepayment(ruleSetFor(2025)!, D(54435))!.toFixed(2)).toBe('544.35');
+    expect(helpRepayment(ruleSetFor(2024)!, D(151201))!.toFixed(2)).toBe('15120.10');
+    expect(helpRepayment(ruleSetFor(2023)!, D(48360))!.toFixed(2)).toBe('0.00');
+    expect(helpRepayment(ruleSetFor(2023)!, D(48361))!.toFixed(2)).toBe('483.61');
   });
 });
 
 describe('foreign income tax offset limit', () => {
-  it('ATO 2025 guide worked example: $2,581.80 − $260.80 = $2,321.00 limit; $3,400 paid → $2,321 offset', () => {
-    const limit = fitoLimit(D('2581.80'), D('260.80'), 1000);
-    expect(limit.toFixed(2)).toBe('2321.00');
-    expect(fitoClaim(D(3400), limit, 1000).toFixed(2)).toBe('2321.00');
+  it('limit above $1,000 is used and the claim is the lesser of foreign tax and the limit (ATO 2024 guide examples are in tax-official.test.ts)', () => {
+    const limit = fitoLimit(D('6000'), D('3000'), 1000);
+    expect(limit.toFixed(2)).toBe('3000.00');
+    expect(fitoClaim(D(3400), limit, 1000).toFixed(2)).toBe('3000.00');
   });
   it('a difference of $1,000 or less leaves the $1,000 default limit', () => {
     expect(fitoLimit(D(5000), D(4500), 1000).toFixed(2)).toBe('1000.00');
@@ -246,10 +284,9 @@ describe('tax-year engine — v1.2 scenarios (hand-calculated)', () => {
     expect(D(est(r, 'help')!).toFixed(2)).toBe('1234.56');
   });
 
-  it('HELP for 2024–25 is flagged, not guessed', () => {
+  it('HELP for 2024–25 uses the percentage-of-total table: $90,000 → 5.0% = $4,500', () => {
     const r = run(2025, [salary('2024-09-01', '90000')], { helpDebt: 'yes' });
-    expect(est(r, 'help')).toBeNull();
-    expect(r.issues.some((i) => i.code === 'HELP_NOT_COMPUTED' && i.severity === 'warning')).toBe(true);
+    expect(D(est(r, 'help')!).toFixed(2)).toBe('4500.00');
   });
 
   it('MLS with no private cover is included in the amount payable (2025–26, single, $120,000)', () => {
@@ -292,9 +329,9 @@ describe('tax-year engine — v1.2 scenarios (hand-calculated)', () => {
     expect(D(est(r, 'medicare')!).toFixed(2)).toBe('0.00');
   });
 
-  it('working holiday maker 2023–24 is not available (rates not confirmed)', () => {
+  it('working holiday maker 2023–24 (ATO / ITRA comp. 61): $6,750 + 32.5% × 5,000 = $8,375', () => {
     const r = run(2024, [salary('2023-09-01', '50000')], { residency: 'working_holiday' });
-    expect(r.estimateStatus).toBe('not_available');
+    expect(D(est(r, 'gross_tax')!).toFixed(2)).toBe('8375.00');
   });
 
   it('prior-year tax losses are deducted and the excess carried forward', () => {
@@ -352,12 +389,12 @@ describe('tax-year engine — v1.2 scenarios (hand-calculated)', () => {
     expect(r.issues.some((i) => i.code === 'WASH_SALE_REVIEW')).toBe(true);
   });
 
-  it('franking credits above $5,000: missing ex-dividend dates are flagged; at or below $5,000 no test is needed', () => {
-    const div = (credit: string, extra: Partial<Transaction> = {}) => txn({ kind: 'income', date: '2025-09-20', category: 'dividend_au', taxClass: 'DIVIDEND', amount: '14000', frankedAmount: '14000', frankingCredit: credit, ...extra });
-    const big = run(2026, [div('6000')]);
-    expect(big.issues.find((i) => i.code === 'FRANKING_HOLDING_PERIOD')?.severity).toBe('warning');
-    const small = run(2026, [div('5000')]);
-    expect(small.issues.some((i) => i.code === 'FRANKING_HOLDING_PERIOD')).toBe(false);
+  it('franking credits of $5,000 or more trigger the holding period rule; below $5,000 the small shareholder exemption applies (ATO)', () => {
+    const div = (credit: string, extra: Partial<Transaction> = {}) => txn({ kind: 'income', date: '2025-09-20', category: 'dividend_au', taxClass: 'DIVIDEND', amount: '11667', frankedAmount: '11667', frankingCredit: credit, ...extra });
+    expect(run(2026, [div('6000')]).issues.find((i) => i.code === 'FRANKING_HOLDING_PERIOD')?.severity).toBe('warning');
+    // Regression: exactly $5,000 is "$5,000 or more" — previously treated as exempt.
+    expect(run(2026, [div('5000')]).issues.find((i) => i.code === 'FRANKING_HOLDING_PERIOD')?.severity).toBe('warning');
+    expect(run(2026, [div('4999.99')]).issues.some((i) => i.code === 'FRANKING_HOLDING_PERIOD')).toBe(false);
   });
 
   it('franking holding period: shares bought 10 days before ex-date and sold 5 days after → possible failure', () => {

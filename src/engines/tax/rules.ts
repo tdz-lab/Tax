@@ -40,6 +40,8 @@ export interface LitoParams {
  * on the date shown, because direct page access was blocked in the build environment).
  */
 export type CheckStatus =
+  | 'verified' // figure read in an official source (ATO page or Federal Register of Legislation compilation)
+  | 'partially_verified' // part of the parameter read in an official source; the rest is stated in the note
   | 'ato_search_summary' // figure matched an ato.gov.au page as returned by a web-search summary
   | 'statutory_reference' // fixed by legislation (section cited), not re-checked against the ATO site
   | 'conflicting' // ATO sources returned conflicting figures — treat as unverified
@@ -51,6 +53,10 @@ export interface ParamCheck {
   source: string;
   checkedOn: string;
   note?: string;
+  /** Table, section or example within the source. */
+  section?: string;
+  /** Publication / "last updated" / compilation date shown on the source. */
+  sourceDate?: string;
 }
 
 /** Family (spouse / dependants) Medicare levy low-income thresholds. Null members are not known. */
@@ -76,6 +82,12 @@ export interface HelpParams {
   totalIncomeRate: { above: number; rate: string }; // above this, rate × total repayment income
 }
 
+/** Study-loan repayment up to 2024–25: one rate applied to the whole repayment income. */
+export interface HelpPercentParams {
+  /** Repayment income at or above `from` attracts `rate` of total repayment income (highest band applies). */
+  percentOfTotal: { from: number; rate: string }[];
+}
+
 export interface TaxRuleSet {
   id: string;
   fy: FYear;
@@ -95,7 +107,7 @@ export interface TaxRuleSet {
   // ---- added in rule-set version 2 (optional so older imported JSON stays valid) ----
   medicareFamily?: MedicareFamily | null;
   mls?: MlsParams | null;
-  help?: HelpParams | null;
+  help?: HelpParams | HelpPercentParams | null;
   /** Part-year resident tax-free threshold: base + perYear × months resident / 12. */
   partYearThreshold?: { base: number; perYear: number } | null;
   whmBrackets?: Bracket[] | null;
@@ -508,7 +520,275 @@ const RULE_SETS_V2: TaxRuleSet[] = [
   }
 ];
 
-export const RULE_SETS: TaxRuleSet[] = [...RULE_SETS_V1, ...RULE_SETS_V2];
+// ---------------------------------------------------------------------------------------------
+// Version 3 (20 Oct 2026): audit against official sources actually read — ATO web pages (printed to
+// PDF by the user from ato.gov.au, because ato.gov.au refuses connections from the build server) and
+// compilations on the Federal Register of Legislation. See docs/TAX_RULE_VERIFICATION.md.
+// ---------------------------------------------------------------------------------------------
+const AUDIT = '2026-10-20';
+const SRC = {
+  atoRes: 'ATO — "Tax rates – Australian resident" (ato.gov.au/tax-rates-and-codes/tax-rates-austr…; printed copy pp 1–3 of 19)',
+  atoForeign: 'ATO — "Tax rates – foreign resident" (ato.gov.au/tax-rates-and-codes/tax-rates-forei…; printed copy pp 1–2 of 14)',
+  atoWhm: 'ATO — "Tax rates – working holiday maker" (ato.gov.au/tax-rates-and-codes/tax-rates-work…; printed copy pp 1–2 of 5)',
+  atoMedLow: 'ATO — "Medicare levy reduction for low-income earners" (QC page, last updated 30 Jun 2026)',
+  atoM1: (y: number, d: string) => `ATO — "M1 Medicare levy reduction or exemption ${y}" (${d})`,
+  atoMls: 'ATO — "Medicare levy surcharge income, thresholds and rates" (QC 49961)',
+  atoHelp: 'ATO — "Study and training loan minimum repayment income and rates" (QC 16176)',
+  atoFito: 'ATO — "Calculate your FITO or offset limit" (Guide to foreign income tax offset rules 2024, QC 101688)',
+  atoIawo: 'ATO — "Instant asset write-off for eligible businesses" (QC 61417)',
+  itra66: 'Income Tax Rates Act 1986, Compilation No. 66 (1 Jul 2026, C2026C00300) — legislation.gov.au/C2004A03348/2026-07-01/2026-07-01/text/original/pdf',
+  itra61: 'Income Tax Rates Act 1986, Compilation No. 61 (20 Oct 2023) — legislation.gov.au/C2004A03348/2023-10-20/2023-10-20/text/original/pdf',
+  mla: (n: number, d: string, id: string) => `Medicare Levy Act 1986, Compilation No. ${n} (${d}) — legislation.gov.au/C2004A03351/${id}/${id}/text/original/pdf`,
+  itaa97: 'Income Tax Assessment Act 1997, Compilation No. 267 (27 Aug 2026, C2026C00400) — legislation.gov.au/C2004A05138/2026-08-27',
+  cgtGuide: 'ATO — "Personal investors guide to capital gains tax 2025" (published 29 May 2025, QC 104651)'
+};
+const ok = (param: string, source: string, section: string, sourceDate: string, note?: string): ParamCheck => ({ param, status: 'verified', source, section, sourceDate, checkedOn: AUDIT, ...(note ? { note } : {}) });
+const part = (param: string, source: string, section: string, sourceDate: string, note: string): ParamCheck => ({ param, status: 'partially_verified', source, section, sourceDate, checkedOn: AUDIT, note });
+const no = (param: string, note: string): ParamCheck => ({ param, status: 'unverified', source: '—', checkedOn: AUDIT, note });
+
+const PRE_STAGE3_WHM: Bracket[] = [
+  { above: 0, rate: '0.15' },
+  { above: 45000, rate: '0.325' },
+  { above: 120000, rate: '0.37' },
+  { above: 180000, rate: '0.45' }
+];
+const FY2027_RES: Bracket[] = [
+  { above: 0, rate: '0' },
+  { above: 18200, rate: '0.15' },
+  { above: 45000, rate: '0.30' },
+  { above: 135000, rate: '0.37' },
+  { above: 190000, rate: '0.45' }
+];
+const pct = (rows: [number, string][]): HelpPercentParams => ({ percentOfTotal: rows.map(([from, rate]) => ({ from, rate })) });
+const HELP_2023 = pct([[48361, '0.01'], [55837, '0.02'], [59187, '0.025'], [62739, '0.03'], [66503, '0.035'], [70493, '0.04'], [74723, '0.045'], [79207, '0.05'], [83959, '0.055'], [88997, '0.06'], [94337, '0.065'], [99997, '0.07'], [105997, '0.075'], [112356, '0.08'], [119098, '0.085'], [126244, '0.09'], [133819, '0.095'], [141848, '0.10']]);
+const HELP_2024 = pct([[51550, '0.01'], [59519, '0.02'], [63090, '0.025'], [66876, '0.03'], [70889, '0.035'], [75141, '0.04'], [79650, '0.045'], [84430, '0.05'], [89495, '0.055'], [94866, '0.06'], [100558, '0.065'], [106591, '0.07'], [112986, '0.075'], [119765, '0.08'], [126951, '0.085'], [134569, '0.09'], [142643, '0.095'], [151201, '0.10']]);
+const HELP_2025 = pct([[54435, '0.01'], [62851, '0.02'], [66621, '0.025'], [70619, '0.03'], [74856, '0.035'], [79347, '0.04'], [84108, '0.045'], [89155, '0.05'], [94504, '0.055'], [100175, '0.06'], [106186, '0.065'], [112557, '0.07'], [119310, '0.075'], [126468, '0.08'], [134057, '0.085'], [142101, '0.09'], [150627, '0.095'], [159664, '0.10']]);
+
+const COMMON_V3_CHECKS = (fy: FYear): ParamCheck[] => [
+  ok('medicareLevyRate', SRC.mla(53, '1 Jul 2026', '2026-07-01'), 's 6(1): "The rate of levy payable by a person upon a taxable income is 2%" (same text in compilations 49, 50 and 52)', '2026-07-01'),
+  ok('cgtDiscountIndividual', SRC.itaa97, 's 115-100(aa): 50% for an individual from a CGT event happening before 1 July 2027 (s 115-105/115-110 foreign or temporary residents excepted); s 115-25: asset acquired at least 12 months before the event', '2026-08-27', 'From 1 July 2027 the enacted s 115-100(f) gives individuals 0% except new residential dwellings (s 115-102); later years are not supported.'),
+  ok('fitoDeMinimis', SRC.atoFito, '"FITO up to $1000"; "How to calculate your offset limit" steps 1–3; Example 17', 'published 30 May 2024', 'Guide is the 2024 edition (2023–24 figures); the method is not year-specific in the guide.'),
+  fy >= 2021
+    ? ok('lito', SRC.itaa97, 's 61-110(1): entitled for 2020-21 or later if an Australian resident at any time during the year and taxable income ≤ $66,667; s 61-115 table: $700; less 5% of excess over $37,500; $325 less 1.5% of excess over $45,000', '2026-08-27', 'Not pro-rated for part-year residents. The under-18 cap (s 61-115(2)) is not applied.')
+    : no('lito', 'Not applicable.'),
+  part('lowValuePool', 'No source supplied', '—', '—', 'Low-value pool rates (18.75% / 37.5%) were not in the documents reviewed — unverified.')
+];
+
+const V3_NOTE = 'Rule-set version 3 (20 Oct 2026): audited against ATO pages (user-supplied printed copies) and Federal Register of Legislation compilations — see "checks" and docs/TAX_RULE_VERIFICATION.md. Not reviewed by a registered tax agent.';
+const V3_NOT_IMPLEMENTED = [
+  'Private health insurance rebate adjustments',
+  'Seniors and pensioners tax offset (SAPTO) and its Medicare thresholds',
+  'Medicare levy exemption for foreign-resident days of a part-year resident (ATO M1 Part B, category 2) — part-year Medicare shown for a full year',
+  'Non-commercial loss rules (Div 35) for business losses; net exempt income',
+  'Concessional ETP / lump-sum taxation; super lump sums in Medicare and MLS income',
+  'Small business income tax offset; small business pool; car limit',
+  'Forex realisation gains/losses on foreign currency balances (Div 775) — flagged only',
+  'Indexation of cost base for assets acquired at or before 11:45 am 21 September 1999 — flagged only',
+  'CGT discount apportionment for foreign/temporary residency periods (s 115-105, 115-115)',
+  'CGT reforms for events on or after 1 July 2027 (deemed reacquisition, Subdiv 112-E; 0% individual discount)',
+  'Trading stock (Div 70) closing-stock valuation'
+];
+
+const RULE_SETS_V3: TaxRuleSet[] = [
+  {
+    id: 'AU-IND-FY2023-v3',
+    fy: 2023,
+    version: 3,
+    status: 'partially_verified',
+    publishedAt: AUDIT,
+    residentBrackets: PRE_STAGE3_RES,
+    nonResidentBrackets: PRE_STAGE3_NONRES,
+    whmBrackets: PRE_STAGE3_WHM,
+    medicareLevyRate: '0.02',
+    medicareLowIncome: { singleLower: 24276, singleUpper: 30345, shadeInRate: '0.10', saptoLower: 38365, saptoUpper: 47956 },
+    medicareFamily: { lower: 40939, lowerPerChild: 3760, upper: 51173, upperPerChild: 4700 },
+    mls: { single: [90000, 105000, 140000], family: [180000, 210000, 280000], rates: MLS_RATES, familyIncreasePerChildAfterFirst: 1500 },
+    help: HELP_2023,
+    partYearThreshold: PART_YEAR,
+    lito: LITO_2021_ON,
+    cgtDiscountIndividual: '0.5',
+    fitoDeMinimis: 1000,
+    instantAssetWriteOff: { threshold: 0, status: 'partially_verified', note: 'ATO IAWO page: 2022–23 was covered by temporary full expensing (note to Table 1); eligibility must be reviewed.' },
+    lowValuePool: { firstYearRate: '0.1875', subsequentRate: '0.375' },
+    checks: [
+      ok('residentBrackets', SRC.itra61, 'Sch 7 Pt I cl 1 table "2020-21, 2021-22, 2022-23 or 2023-24": 19% above TFT to $45,000; 32.5% to $120,000; 37% to $180,000; 45%', '2023-10-20', 'ATO page (last updated 13 Aug 2026) shows the 2022–23 first two rows; the rest of that table was cut off in the printed copy.'),
+      ok('nonResidentBrackets', SRC.atoForeign, '"Foreign resident tax rates 2022–23": 32.5c to $120,000; $39,000 + 37c; $61,200 + 45c over $180,000', 'last updated 1 Jun 2026', 'Also ITRA comp. 61 Sch 7 Pt II.'),
+      ok('whmBrackets', SRC.itra61, 'Sch 7 Pt III table "2020-21 … 2023-24": 15% to $45,000; 32.5% to $120,000; 37% to $180,000; 45%', '2023-10-20', 'ATO WHM page covers 2023–24 but not 2022–23 in the printed pages.'),
+      ok('partYearThreshold', SRC.itra61, 's 20(1) formula (TFT − $4,736) + $4,736 × months/12; s 3 TFT $18,200; s 16 part-year residency period (part months count as whole months)', '2023-10-20'),
+      ok('medicareLowIncome', SRC.atoM1(2023, 'last updated 25 May 2023'), 'Table 1: $24,276 / $30,345; SAPTO $38,365 / $47,956', '2023-05-25', 'Matches Medicare Levy Act comp. 49 s 3 (threshold amount / phase-in limit).'),
+      ok('medicareFamily', SRC.mla(49, '24 Jun 2023', '2023-06-24'), 's 8(5): family income threshold $40,939 + $3,760 per child; s 8(2) reduction formula', '2023-06-24', 'ATO M1 2023 worksheet 2 family limit $51,173 + $4,700 = 1.25 × threshold (consistent).'),
+      ok('mls', SRC.atoMls, '"MLS income thresholds and rates 2022–23"', 'last updated 22 Jun 2026'),
+      ok('help', SRC.atoHelp, 'Table 5: 2022–23 repayment income thresholds and rates (percentage of total repayment income)', 'last updated 13 Oct 2026'),
+      part('instantAssetWriteOff', SRC.atoIawo, 'Table 1 note: temporary full expensing for 2020–21 to 2022–23', 'last updated 28 Aug 2026', 'Temporary full expensing is not modelled.'),
+      ...COMMON_V3_CHECKS(2023)
+    ],
+    sources: [SRC.atoRes, SRC.atoForeign, SRC.atoWhm, SRC.atoM1(2023, '25 May 2023'), SRC.atoMls, SRC.atoHelp, SRC.atoFito, SRC.itra61, SRC.mla(49, '24 Jun 2023', '2023-06-24'), SRC.itaa97],
+    notes: [V3_NOTE, 'LMITO ceased after 2021–22 and is not applied.', 'For 2022–23 the ATO excludes the taxed element of certain super lump sums from Medicare taxable income — not modelled.'],
+    notImplemented: V3_NOT_IMPLEMENTED
+  },
+  {
+    id: 'AU-IND-FY2024-v3',
+    fy: 2024,
+    version: 3,
+    status: 'partially_verified',
+    publishedAt: AUDIT,
+    residentBrackets: PRE_STAGE3_RES,
+    nonResidentBrackets: PRE_STAGE3_NONRES,
+    whmBrackets: PRE_STAGE3_WHM,
+    medicareLevyRate: '0.02',
+    medicareLowIncome: { singleLower: 26000, singleUpper: 32500, shadeInRate: '0.10', saptoLower: 41089, saptoUpper: 51361 },
+    medicareFamily: { lower: 43846, lowerPerChild: 4027, upper: 54807, upperPerChild: 5034 },
+    mls: { single: [93000, 108000, 144000], family: [186000, 216000, 288000], rates: MLS_RATES, familyIncreasePerChildAfterFirst: 1500 },
+    help: HELP_2024,
+    partYearThreshold: PART_YEAR,
+    lito: LITO_2021_ON,
+    cgtDiscountIndividual: '0.5',
+    fitoDeMinimis: 1000,
+    instantAssetWriteOff: { threshold: 20000, status: 'verified', note: 'ATO IAWO Table 1: $20,000 for assets first used or installed ready for use on or after 1 July 2023 (aggregated turnover < $10m, simplified depreciation rules). Cost must be less than the limit.' },
+    lowValuePool: { firstYearRate: '0.1875', subsequentRate: '0.375' },
+    checks: [
+      ok('residentBrackets', SRC.atoRes, '"Resident tax rates 2023–24": 19c; $5,092 + 32.5c over $45,000; $29,467 + 37c over $120,000; $51,667 + 45c over $180,000', 'last updated 13 Aug 2026', 'Also ITRA comp. 61 Sch 7 Pt I.'),
+      ok('nonResidentBrackets', SRC.atoForeign, '"Foreign resident tax rates 2023–24": 32.5c to $120,000; $39,000 + 37c; $61,200 + 45c over $180,000', 'last updated 1 Jun 2026'),
+      ok('whmBrackets', SRC.atoWhm, '"Working holiday maker tax rates 2023–24": 15c to $45,000; $6,750 + 32.5c; $31,125 + 37c over $120,000 (top row cut off in print — 45% over $180,000 from ITRA comp. 61 Sch 7 Pt III)', 'last updated 1 Jun 2026'),
+      ok('partYearThreshold', SRC.itra61, 's 20(1) formula', '2023-10-20'),
+      ok('medicareLowIncome', SRC.atoM1(2024, 'published 29 May 2024'), 'Table 1: $26,000 / $32,500; SAPTO $41,089 / $51,361', '2024-05-29', 'Matches Medicare Levy Act comp. 50.'),
+      ok('medicareFamily', SRC.mla(50, '6 Mar 2024', '2024-03-06'), 's 8(5): $43,846 + $4,027 per child', '2024-03-06', 'ATO M1 2024 worksheet 2: limit $54,807 + $5,034 = 1.25 × threshold (consistent).'),
+      ok('mls', SRC.atoMls, '"MLS income thresholds and rates for 2023–24"', 'last updated 22 Jun 2026'),
+      ok('help', SRC.atoHelp, 'Table 4: 2023–24 repayment income thresholds and rates', 'last updated 13 Oct 2026'),
+      ok('instantAssetWriteOff', SRC.atoIawo, 'Table 1: on or after 1 July 2023 — $20,000', 'last updated 28 Aug 2026'),
+      ...COMMON_V3_CHECKS(2024)
+    ],
+    sources: [SRC.atoRes, SRC.atoForeign, SRC.atoWhm, SRC.atoM1(2024, '29 May 2024'), SRC.atoMls, SRC.atoHelp, SRC.atoFito, SRC.atoIawo, SRC.itra61, SRC.mla(50, '6 Mar 2024', '2024-03-06'), SRC.itaa97],
+    notes: [V3_NOTE, 'For 2023–24 the ATO excludes the taxed element of certain super lump sums from Medicare and MLS income — not modelled.'],
+    notImplemented: V3_NOT_IMPLEMENTED
+  },
+  {
+    id: 'AU-IND-FY2025-v3',
+    fy: 2025,
+    version: 3,
+    status: 'partially_verified',
+    publishedAt: AUDIT,
+    residentBrackets: STAGE3_RES,
+    nonResidentBrackets: STAGE3_NONRES,
+    whmBrackets: STAGE3_WHM,
+    medicareLevyRate: '0.02',
+    medicareLowIncome: { singleLower: 27222, singleUpper: 34027, shadeInRate: '0.10', saptoLower: 43020, saptoUpper: 53775 },
+    medicareFamily: { lower: 45907, lowerPerChild: 4216, upper: 57383, upperPerChild: 5270 },
+    mls: { single: [97000, 113000, 151000], family: [194000, 226000, 302000], rates: MLS_RATES, familyIncreasePerChildAfterFirst: 1500 },
+    help: HELP_2025,
+    partYearThreshold: PART_YEAR,
+    lito: LITO_2021_ON,
+    cgtDiscountIndividual: '0.5',
+    fitoDeMinimis: 1000,
+    instantAssetWriteOff: { threshold: 20000, status: 'verified', note: 'ATO IAWO Table 1: $20,000 (on or after 1 July 2023).' },
+    lowValuePool: { firstYearRate: '0.1875', subsequentRate: '0.375' },
+    checks: [
+      ok('residentBrackets', SRC.atoRes, '"Resident tax rates 2024–25": 16c; $4,288 + 30c over $45,000; $31,288 + 37c over $135,000; $51,638 + 45c over $190,000', 'last updated 13 Aug 2026', 'Also ITRA comp. 66 Sch 7 Pt I ("2024-25 or 2025-26").'),
+      ok('nonResidentBrackets', SRC.atoForeign, '"Foreign resident tax rates 2024–25": 30c to $135,000; $40,500 + 37c; $60,850 + 45c over $190,000', 'last updated 1 Jun 2026', 'Resolves the earlier conflicting search result. Also ITRA comp. 66 Sch 7 Pt II.'),
+      ok('whmBrackets', SRC.atoWhm, '"Working holiday maker tax rates 2024–25"', 'last updated 1 Jun 2026'),
+      ok('partYearThreshold', SRC.itra66, 's 20(1) formula; s 3 TFT $18,200', '2026-07-01'),
+      ok('medicareLowIncome', SRC.atoM1(2025, 'published 27 May 2025'), 'Table 1: $27,222 / $34,027; SAPTO $43,020 / $53,775', '2025-05-27', 'Matches Medicare Levy Act comp. 52.'),
+      ok('medicareFamily', SRC.mla(52, '28 Mar 2025', '2025-03-28'), 's 8(5): $45,907 + $4,216 per child', '2025-03-28', 'ATO M1 2025 worksheet 2: limit $57,383 + $5,270 = 1.25 × threshold (consistent).'),
+      ok('mls', SRC.atoMls, '"MLS income thresholds and rates for 2024–25"', 'last updated 22 Jun 2026'),
+      ok('help', SRC.atoHelp, 'Table 3: 2024–25 repayment income thresholds and rates; Example 4 (Branson)', 'last updated 13 Oct 2026'),
+      ok('instantAssetWriteOff', SRC.atoIawo, 'Table 1', 'last updated 28 Aug 2026'),
+      ...COMMON_V3_CHECKS(2025)
+    ],
+    sources: [SRC.atoRes, SRC.atoForeign, SRC.atoWhm, SRC.atoM1(2025, '27 May 2025'), SRC.atoMls, SRC.atoHelp, SRC.atoFito, SRC.atoIawo, SRC.itra66, SRC.mla(52, '28 Mar 2025', '2025-03-28'), SRC.itaa97, SRC.cgtGuide],
+    notes: [V3_NOTE],
+    notImplemented: V3_NOT_IMPLEMENTED
+  },
+  {
+    id: 'AU-IND-FY2026-v3',
+    fy: 2026,
+    version: 3,
+    status: 'partially_verified',
+    publishedAt: AUDIT,
+    residentBrackets: STAGE3_RES,
+    nonResidentBrackets: STAGE3_NONRES,
+    whmBrackets: STAGE3_WHM,
+    medicareLevyRate: '0.02',
+    medicareLowIncome: { singleLower: 28011, singleUpper: 35013, shadeInRate: '0.10', saptoLower: 44268, saptoUpper: 55335 },
+    medicareFamily: { lower: 47238, lowerPerChild: 4338, upper: 59047, upperPerChild: 5423 },
+    mls: { single: [101000, 118000, 158000], family: [202000, 236000, 316000], rates: MLS_RATES, familyIncreasePerChildAfterFirst: 1500 },
+    help: {
+      minimum: 67000,
+      bands: [
+        { above: 67000, base: '0', rate: '0.15' },
+        { above: 125000, base: '8700', rate: '0.17' }
+      ],
+      totalIncomeRate: { above: 179285, rate: '0.10' }
+    },
+    partYearThreshold: PART_YEAR,
+    lito: LITO_2021_ON,
+    cgtDiscountIndividual: '0.5',
+    fitoDeMinimis: 1000,
+    instantAssetWriteOff: { threshold: 20000, status: 'verified', note: 'ATO IAWO Table 1: $20,000 (on or after 1 July 2023); page examples use the $20,000 limit for 2025–26.' },
+    lowValuePool: { firstYearRate: '0.1875', subsequentRate: '0.375' },
+    checks: [
+      ok('residentBrackets', SRC.atoRes, '"Resident tax rates 2025–26"', 'last updated 13 Aug 2026', 'Also ITRA comp. 66.'),
+      ok('nonResidentBrackets', SRC.atoForeign, '"Foreign resident tax rates 2025–26"', 'last updated 1 Jun 2026'),
+      ok('whmBrackets', SRC.atoWhm, '"Working holiday maker tax rates 2025–26"', 'last updated 1 Jun 2026'),
+      ok('partYearThreshold', SRC.itra66, 's 20(1) formula', '2026-07-01'),
+      ok('medicareLowIncome', SRC.atoMedLow, 'Table: Medicare levy thresholds for a single individual — $28,011 / $35,013; SAPTO $44,268 / $55,335', 'last updated 30 Jun 2026', 'Same in ATO M1 2026 (last updated 30 May 2026) and Medicare Levy Act comp. 53.'),
+      ok('medicareFamily', SRC.mla(53, '1 Jul 2026', '2026-07-01'), 's 8(5): $47,238 + $4,338 per child', '2026-07-01', 'Family limit $59,047 + $5,423 = 1.25 × threshold (phase-in where the s 8(2) reduction reaches nil).'),
+      ok('mls', SRC.atoMls, '"MLS income thresholds and rates for 2025–26"', 'last updated 22 Jun 2026'),
+      ok('help', SRC.atoHelp, 'Table 2: 2025–26 repayment income and rates', 'last updated 13 Oct 2026'),
+      ok('instantAssetWriteOff', SRC.atoIawo, 'Table 1; examples for 2025–26', 'last updated 28 Aug 2026'),
+      ...COMMON_V3_CHECKS(2026)
+    ],
+    sources: [SRC.atoRes, SRC.atoForeign, SRC.atoWhm, SRC.atoMedLow, SRC.atoM1(2026, '30 May 2026'), SRC.atoMls, SRC.atoHelp, SRC.atoFito, SRC.atoIawo, SRC.itra66, SRC.mla(53, '1 Jul 2026', '2026-07-01'), SRC.itaa97],
+    notes: [V3_NOTE],
+    notImplemented: V3_NOT_IMPLEMENTED
+  },
+  {
+    id: 'AU-IND-FY2027-v3',
+    fy: 2027,
+    version: 3,
+    status: 'partially_verified',
+    publishedAt: AUDIT,
+    residentBrackets: FY2027_RES,
+    nonResidentBrackets: STAGE3_NONRES,
+    whmBrackets: STAGE3_WHM,
+    medicareLevyRate: '0.02',
+    medicareLowIncome: null,
+    medicareFamily: null,
+    mls: { single: [105000, 123000, 164000], family: [210000, 246000, 328000], rates: MLS_RATES, familyIncreasePerChildAfterFirst: 1500 },
+    help: {
+      minimum: 69528,
+      bands: [
+        { above: 69528, base: '0', rate: '0.15' },
+        { above: 129717, base: '9028', rate: '0.17' }
+      ],
+      totalIncomeRate: { above: 186050, rate: '0.10' }
+    },
+    partYearThreshold: PART_YEAR,
+    lito: LITO_2021_ON,
+    cgtDiscountIndividual: '0.5',
+    fitoDeMinimis: 1000,
+    instantAssetWriteOff: { threshold: 20000, status: 'partially_verified', note: 'ATO IAWO Table 1 (updated 28 Aug 2026) lists $20,000 for assets first used on or after 1 July 2023 with no end date; no 2026–27 example — confirm.' },
+    lowValuePool: { firstYearRate: '0.1875', subsequentRate: '0.375' },
+    checks: [
+      ok('residentBrackets', SRC.atoRes, '"Resident tax rates 2026–27": 15c; $4,020 + 30c over $45,000; $31,020 + 37c over $135,000; $51,370 + 45c over $190,000', 'last updated 13 Aug 2026', 'Enacted: ITRA comp. 66 Sch 7 Pt I table for 2026-27 (14% from 2027-28).'),
+      ok('nonResidentBrackets', SRC.itra66, 'Sch 7 Pt II table "2024-25 year of income or a later year": second resident rate (30% in 2026-27) to $135,000; third (37%) to $190,000; 45%', '2026-07-01', 'The ATO foreign-resident page (updated 1 Jun 2026) does not yet list 2026–27.'),
+      ok('whmBrackets', SRC.itra66, 'Sch 7 Pt III table "2024-25 year of income or a later year": 15% / 30% / 37% / 45%', '2026-07-01', 'The ATO WHM page (updated 1 Jun 2026) does not yet list 2026–27.'),
+      ok('partYearThreshold', SRC.itra66, 's 20(1) formula; s 3 TFT $18,200', '2026-07-01'),
+      no('medicareLowIncome', 'No 2026–27 thresholds published in the sources read: the ATO low-income page covers 2025–26, and Medicare Levy Act comp. 53 (1 Jul 2026) still holds the 2025–26 amounts, which are usually amended after the year starts. Low-income reduction NOT applied (flagged).'),
+      no('medicareFamily', 'Not published for 2026–27 in the sources read.'),
+      ok('mls', SRC.atoMls, '"MLS income thresholds and rates for 2026–27"; example (Tom: $117,000 × 1% = $1,170)', 'last updated 22 Jun 2026'),
+      ok('help', SRC.atoHelp, 'Table 1: 2026–27 repayment income and rates; Examples 1–3', 'last updated 13 Oct 2026', 'ATO base $9,028 is the rounded 15% × $60,189 ($9,028.35) — the published table is used as shown. The page’s Example 1 lists taxable income $60,470 but adds $60,720 (typo; the stated total $86,380 matches $60,470); Example 3 text cites the 2025–26 $179,286 figure.'),
+      part('instantAssetWriteOff', SRC.atoIawo, 'Table 1: on or after 1 July 2023 — $20,000 (no end date)', 'last updated 28 Aug 2026', 'No 2026–27-specific statement.'),
+      ...COMMON_V3_CHECKS(2027)
+    ],
+    sources: [SRC.atoRes, SRC.atoMls, SRC.atoHelp, SRC.atoFito, SRC.atoIawo, SRC.itra66, SRC.mla(53, '1 Jul 2026', '2026-07-01'), SRC.itaa97],
+    notes: [V3_NOTE, 'Current/incomplete financial year. Medicare levy low-income and family thresholds for 2026–27 are not yet published (see checks).'],
+    notImplemented: [...V3_NOT_IMPLEMENTED, 'Medicare levy low-income and family reductions for 2026–27 (thresholds not published)']
+  }
+];
+
+for (const v2 of RULE_SETS_V2) v2.supersededBy = v2.id.replace('-v2', '-v3');
+
+export const RULE_SETS: TaxRuleSet[] = [...RULE_SETS_V1, ...RULE_SETS_V2, ...RULE_SETS_V3];
 
 /** The parameter checks for a rule set (empty for version 1 and imported sets without checks). */
 export function checksFor(rs: TaxRuleSet | null, param: string): ParamCheck | null {

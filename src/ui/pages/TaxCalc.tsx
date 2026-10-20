@@ -7,7 +7,7 @@ import { D, formatMoney, formatQty } from '../../lib/decimal';
 import { formatDate, formatInstant, fyLabel, fyLongLabel } from '../../lib/dates';
 import { ruleSetFor, type CheckStatus } from '../../engines/tax/rules';
 
-const CHECK_LABEL: Record<CheckStatus, string> = { ato_search_summary: 'ATO page (search summary)', statutory_reference: 'Legislation reference', conflicting: 'Conflicting sources', unverified: 'Not confirmed' };
+const CHECK_LABEL: Record<CheckStatus, string> = { verified: 'Verified (official source read)', partially_verified: 'Partly verified', ato_search_summary: 'ATO page (search summary)', statutory_reference: 'Legislation reference', conflicting: 'Conflicting sources', unverified: 'Not confirmed' };
 import type { TaxLine, TaxYearResult } from '../../engines/tax/taxEngine';
 import { diffSummaries, saveCalculationRun } from '../../services/calc';
 import { useApp } from '../AppContext';
@@ -224,7 +224,7 @@ export function TaxCalc() {
               {rs.checks && rs.checks.length > 0 && (
                 <details className="adv" open>
                   <summary>How each figure was checked</summary>
-                  <p className="muted">“ATO page (search summary)” means the figure matched an ato.gov.au page as returned by a web search on the date shown — the page itself could not be opened from the build environment. No figure has been reviewed by a registered tax agent.</p>
+                  <p className="muted">“Verified” means the figure was read in the official source shown — an ATO page (printed copy supplied by the user, because ato.gov.au refuses connections from the build server) or a Federal Register of Legislation compilation — and compared with the app. It does not mean a registered tax agent has reviewed it. Unverified figures are not used, or are used with a warning.</p>
                   <table className="dt">
                     <thead>
                       <tr>
@@ -241,9 +241,11 @@ export function TaxCalc() {
                             <span className={`badge ${c.status === 'conflicting' || c.status === 'unverified' ? 'warn' : ''}`}>{CHECK_LABEL[c.status]}</span>
                           </td>
                           <td>
-                            {c.note && <div>{c.note}</div>}
+                            {c.section && <div>{c.section}</div>}
+                            {c.note && <div className="muted">{c.note}</div>}
                             <div className="muted" style={{ fontSize: 11.5 }}>
-                              {c.source} · {c.checkedOn}
+                              {c.source}
+                              {c.sourceDate ? ` · source dated ${c.sourceDate}` : ''} · checked {c.checkedOn}
                             </div>
                           </td>
                         </tr>

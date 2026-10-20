@@ -268,6 +268,16 @@ interface YearCapital {
 }
 
 /**
+ * CGT discount percentage for individuals in a year: the rule set's value, else 50% for years ending
+ * by 30 June 2027 (ITAA 1997 s 115-100(aa): events before 1 July 2027), else unknown (null).
+ */
+export function discountRateFor(fy: FYear): string | null {
+  const rs = ruleSetFor(fy);
+  if (rs) return rs.cgtDiscountIndividual;
+  return fy <= 2027 ? '0.5' : null;
+}
+
+/**
  * Trust capital gains from a distribution. With AMMA components the discounted gain is grossed up
  * ×2 (the other half being the CGT concession amount); otherwise the single recorded component is
  * treated as a non-discount gain (flagged).
@@ -382,7 +392,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     if (!partYearScale) {
       issues.push({ code: 'RESIDENCY_UNSUPPORTED', severity: 'blocking', message: rs?.partYearThreshold ? 'Part-year resident: enter the number of months you were a resident (Tax profile) to pro-rate the tax-free threshold.' : `Part-year resident: the pro-rated tax-free threshold is not confirmed for ${fyLabel(fy)} — tax estimate unavailable.`, txnIds: [] });
     } else {
-      issues.push({ code: 'PART_YEAR', severity: 'warning', message: `Part-year resident (${months} month${months === 1 ? '' : 's'}): tax-free threshold pro-rated to $${dstr(partYearThreshold(rs!, months)!)}. Only include foreign income earned while a resident. The Medicare levy shown is for a full year (exemption for the non-resident period not calculated) and full LITO is applied — confirm both.`, txnIds: [] });
+      issues.push({ code: 'PART_YEAR', severity: 'warning', message: `Part-year resident (${months} month${months === 1 ? '' : 's'}): tax-free threshold pro-rated to $${dstr(partYearThreshold(rs!, months)!)}. Only include foreign income earned while a resident. Full LITO applies (ITAA 1997 s 61-110: resident at any time during the year; not pro-rated). The Medicare levy shown is for a full year — the exemption for foreign-resident days is not calculated. The CGT discount is not apportioned for any foreign-residency period after 8 May 2012 (s 115-105) — review.`, txnIds: [] });
     }
   }
   if (residency === 'working_holiday') {
@@ -466,7 +476,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     const ids = divs.map((t) => t.id);
     income.push(line('div_unfranked', 'Unfranked dividends', unfranked, 'recorded', ids));
     income.push(line('div_franked', 'Franked dividends', franked, 'recorded', ids));
-    income.push(line('franking_credits', 'Franking credits (gross-up, assessable)', credits, 'recorded', ids, 'Franking credits are included in assessable income and claimed as a refundable offset (holding-period rule not tested — review for >$5,000 credits).', notes));
+    income.push(line('franking_credits', 'Franking credits (gross-up, assessable)', credits, 'recorded', ids, 'Franking credits are included in assessable income and claimed as a refundable offset. The holding period rule applies when total credits are $5,000 or more (see issues).', notes));
     assessable = add(add(add(assessable, unfranked), franked), credits);
   }
   // Trust distributions
@@ -655,7 +665,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     const resY = p?.residency ?? 'unknown';
     const yc = capitalInputsForYear(y, lots, deriv, data.transactions, resY === 'resident' || resY === 'part_year' || (resY === 'unknown' && y !== fy));
     if (y < fy && yc.incomplete) chainIncomplete = true;
-    const r = netCapitalGain(yc.disc, yc.nonDisc, yc.losses, available, D(ruleSetFor(y)?.cgtDiscountIndividual ?? '0.5'), input.lossOrdering);
+    const r = netCapitalGain(yc.disc, yc.nonDisc, yc.losses, available, D(discountRateFor(y) ?? '0'), input.lossOrdering);
     carried = r.carryForward;
     if (y === fy) {
       ny = r;
@@ -665,6 +675,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
   }
   const yc = thisYear!;
   const cgt = ny!;
+  if (discountRateFor(fy) === null && yc.disc.gt(0)) issues.push({ code: 'CGT_DISCOUNT_UNKNOWN', severity: 'blocking', message: `No CGT discount is applied for ${fyLabel(fy)}: there is no rule set for this year, and for CGT events on or after 1 July 2027 the enacted ITAA 1997 s 115-100 gives individuals 0% (except new residential dwellings). Not supported.`, txnIds: [] });
   if (!discountAllowed && yc.withheld.gt(0)) issues.push({ code: 'DISCOUNT_WITHHELD', severity: 'warning', message: 'CGT discount not applied because residency is not "resident" for this year.', txnIds: [] });
   if (chainIncomplete) issues.push({ code: 'PRIOR_YEAR_CGT_INCOMPLETE', severity: 'warning', message: 'An earlier year has incomplete CGT calculations, so carried-forward losses may be misstated.', txnIds: [] });
   const capital: CapitalSummary = {
@@ -676,7 +687,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     priorYearLossesAvailable: dstr(priorAvailable),
     lossesAppliedCurrent: dstr(cgt.appliedCurrent),
     lossesAppliedPrior: dstr(cgt.appliedPrior),
-    discountRate: rs?.cgtDiscountIndividual ?? '0.5',
+    discountRate: discountRateFor(fy) ?? '0',
     discountApplied: dstr(cgt.discount),
     netCapitalGain: dstr(cgt.net),
     lossesCarriedForward: dstr(cgt.carryForward),
@@ -708,7 +719,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     grouped.set(i.code, arr);
   }
   for (const [code, ids] of grouped) {
-    const sev: Issue['severity'] = code === 'MISSING_COST_BASE' || code === 'MISSING_RATE' ? 'blocking' : code.startsWith('REVIEW') || code === 'UNMATCHED_TRANSFER' || code === 'POSSIBLE_DOUBLE_COUNT' || code === 'PRE_CGT' ? 'warning' : 'info';
+    const sev: Issue['severity'] = code === 'MISSING_COST_BASE' || code === 'MISSING_RATE' || code === 'CGT_2027_REFORM' ? 'blocking' : code.startsWith('REVIEW') || code === 'UNMATCHED_TRANSFER' || code === 'POSSIBLE_DOUBLE_COUNT' || code === 'PRE_CGT' ? 'warning' : 'info';
     const sample = [...lots.issues, ...deriv.issues].find((i) => i.code === code)!;
     issues.push({ code, severity: sev, message: ids.length > 1 ? `${sample.message} (+${ids.length - 1} similar)` : sample.message, txnIds: ids });
   }
@@ -716,7 +727,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
   // ---------- Franking: small shareholder exemption / 45-day holding period ----------
   const frankingCredits = txnsFY.filter((t) => t.kind === 'income').reduce((acc, t) => acc.plus(D(t.frankingCredit)), ZERO);
   const frankedDivs = incomeTxns.filter((t) => effClass(t) === 'DIVIDEND' && D(t.frankingCredit).gt(0));
-  if (frankingCredits.gt(5000)) {
+  if (frankingCredits.gte(5000)) {
     const noDate = frankedDivs.filter((t) => !t.exDividendDate || !t.instrumentId);
     const atRisk: string[] = [];
     const tested: string[] = [];
@@ -726,9 +737,9 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
       const quick = lots.disposals.filter((d) => d.instrumentId === t.instrumentId && d.disposedDate >= ex && d.disposedDate <= end && d.allocations.some((al) => al.acquiredDate && al.heldDays - 1 < 45));
       (quick.length ? atRisk : tested).push(t.id);
     }
-    issues.push({ code: 'FRANKING_HOLDING_PERIOD', severity: noDate.length || atRisk.length ? 'warning' : 'info', message: `Franking credits total $${dstr(frankingCredits)} (> $5,000 small shareholder exemption), so the 45-day holding period rule applies. ${atRisk.length ? `${atRisk.length} dividend(s) had shares sold within 45 days of the ex-dividend date after being held fewer than 45 days — possible failure. ` : ''}${noDate.length ? `${noDate.length} franked dividend(s) have no ex-dividend date or instrument, so they could not be tested. ` : ''}${tested.length ? `${tested.length} passed the recorded-trade check. ` : ''}The check uses recorded trades only (the ATO's last-in-first-out parcel rule, options, short sales and other risk-reducing positions are not tested). Credits are not removed automatically.`, txnIds: [...atRisk, ...noDate.map((t) => t.id)] });
+    issues.push({ code: 'FRANKING_HOLDING_PERIOD', severity: noDate.length || atRisk.length ? 'warning' : 'info', message: `Franking credits total $${dstr(frankingCredits)} — $5,000 or more, so the small shareholder exemption does not apply and the 45-day holding period rule applies to each parcel (ATO: "Refund of franking credits for individuals"). ${atRisk.length ? `${atRisk.length} dividend(s) had shares sold within 45 days of the ex-dividend date after being held fewer than 45 days — possible failure. ` : ''}${noDate.length ? `${noDate.length} franked dividend(s) have no ex-dividend date or instrument, so they could not be tested. ` : ''}${tested.length ? `${tested.length} passed the recorded-trade check. ` : ''}The check uses recorded trades only (the last-in-first-out parcel rule, the 90-day period for preference shares, options, short sales and other risk-reducing positions are not tested). If a parcel fails, none of its franking credits can be claimed — credits are not removed automatically.`, txnIds: [...atRisk, ...noDate.map((t) => t.id)] });
   } else if (frankingCredits.gt(0)) {
-    assumptions.push(`Franking credits total $${dstr(frankingCredits)} — within the $5,000 small shareholder exemption, so the 45-day holding period rule is not tested (a related-payments obligation would still require review).`);
+    assumptions.push(`Franking credits total $${dstr(frankingCredits)} — below $5,000, so under the small shareholder exemption the holding period rule does not apply; the related payments rule still applies to each dividend (not tested).`);
   }
 
   // ---------- Capital account review checks ----------
@@ -858,6 +869,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
         netInvestmentLoss: nil,
         exemptForeignEmployment: efei,
         family: family.hasFamily,
+        spouse: family.spouse,
         spouseMlsIncome: family.spouse ? tryD(profile?.spouseMlsIncome) : ZERO,
         children,
         daysWithoutCover: cover === 'yes' ? (profile?.daysWithoutCover ?? 0) : (profile?.daysWithoutCover ?? yearDays),
@@ -947,7 +959,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
 
   assumptions.push(
     'Amounts are AUD, converted per transaction at the recorded historical rate; original amounts are retained.',
-    'Medicare levy family test: only the confirmed thresholds are applied (nil levy at or below the family threshold; no reduction above the family limit). The reduction amount in between is not calculated.',
+    'Medicare levy family reduction follows Medicare Levy Act s 8 (family income threshold, 2% × threshold − 8% × excess, apportioned for a liable spouse). Eligibility is taken from the profile (spouse on 30 June, or dependent children); for a sole parent, children count only if family tax benefit was payable (s 8(6)).',
     `Capital losses ordering: ${capital.lossOrdering.toLowerCase()}.`,
     'CGT discount (50%) only for capital-account assets held at least 12 months (excluding acquisition and disposal days) by a resident individual.',
     'Brokerage on CGT assets is included in the cost base or reduces proceeds — it is not separately deducted.'

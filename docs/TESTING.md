@@ -1,17 +1,17 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.2.0.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.3.0 (after the official-source tax audit).
 
 ## Commands and results
 
 | Command | What it checks | Result |
 | --- | --- | --- |
-| `npm run typecheck` | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
-| `npm run lint` | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` | 154 unit/integration tests in 10 files | **154 passed, 0 failed** |
-| `npm run build` | Production build + service worker (Workbox precache of 41 entries) | **Passed** |
-| `npm run test:e2e` | 5 Playwright tests against the production build (incl. every tutorial step) | **5 passed, 0 failed** |
+| `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
+| `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
+| `npm test` (`vitest run`) | 191 unit/integration tests in 11 files | **191 passed, 0 failed** |
+| `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,743 KiB) | **Passed** |
+| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 5 Playwright tests against the production build (incl. every tutorial step) | **5 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -30,20 +30,34 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 * **Database migration**: a real v1 database is created and opened with the v2 schema; records preserved and
   back-filled; compound index usable; migration audited.
 
-### Independently derived tax tests (`tests/unit/tax-independent.test.ts`, new in 1.2.0 — 51 tests)
+### Official-source audit tests (`tests/unit/tax-official.test.ts`, new in 1.3.0 — 32 tests)
+Tables typed again from the ATO pages and legislation read in the audit (not imported from the app), compared with
+the engine at every threshold ±1: working holiday maker and foreign-resident scales for all supported years;
+study-loan percentage tables (2022–23 to 2024–25) and marginal tables (2025–26, 2026–27); Medicare levy single
+and family reduction from the Medicare Levy Act ss 7–8 (756 combinations); MLS tiers for each year (single, married,
+sole parent); ATO FITO Examples 16–17; ATO CGT guide Tim and Fred examples; post-1 July 2027 guards (no discount,
+pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person MLS test; part-year 2026–27. See
+[TAX_RULE_VERIFICATION.md](TAX_RULE_VERIFICATION.md).
+
+### Independently derived tax tests (`tests/unit/tax-independent.test.ts`, 1.2.0, updated in 1.3.0 — 56 tests)
 * **Separate reference implementation**: integer-cents tax from the ATO’s “$base + c for each $1 over $threshold”
   tables (typed from the ATO text, not from the app’s rule sets) compared with the engine at 25 incomes per scale,
   including every threshold and threshold + $1, for resident 2022–23 to 2026–27, foreign resident 2025–26 and
   working holiday makers 2024–25 / 2025–26; continuity of the ATO base amounts.
-* **ATO worked examples**: part-year tax-free threshold (3 months $14,648; 6 months $15,832); FITO limit
-  ($2,581.80 − $260.80 = $2,321.00 with $3,400 paid).
+* **ATO worked examples** (1.3.0): MLS (Tom, 2026–27: $1,170); study loans (Christina $2,527.80, Barry $10,276.99,
+  Priya $25,478 — 2026–27; Branson 2024–25, where the ATO’s stated product contains an arithmetic slip — the test
+  asserts the correct $5,485.48 and says so). Part-year threshold from the statutory formula (3 months $14,648;
+  6 months $15,832). The v1.2 FITO test based on search-summary figures was removed.
 * **Hand-calculated edge cases**: Medicare single shade-in at $28,011 / $30,000 / $35,013 / $35,014; family test
   (exactly at the threshold, children, sole parent, between thresholds → flagged, above the limit, missing spouse
   income → flagged); MLS tiers at threshold and threshold + $1, RFB / net investment loss, days without cover,
   family + per-child increase, leap-year day count; HELP 2025–26 at every band boundary and $1 either side of
   $179,285; FITO default limit.
-* **Provenance**: no built-in current rule set claims “verified”; every one records checks for each core
-  parameter; version 1 sets retained; conflicting/unconfirmed parameters are null rather than guessed.
+* **Provenance**: no rule set as a whole claims “verified”; every one records a check for each core parameter, and
+  every VERIFIED check names its source, section and date; earlier versions retained; unpublished 2026–27 Medicare
+  thresholds are null rather than guessed.
+* **Regression (1.3.0)**: franking credits of exactly $5,000 trigger the holding period rule; Medicare family
+  reduction hand calculations ($76.20; $57.00 with a liable spouse; nil point at $59,047); negative spouse income.
 * **Engine scenarios**: FITO limit above $1,000; HELP added to payable and capped at the balance; HELP 2024–25
   flagged; MLS included / not guessed when cover unknown; Medicare family nil levy; part-year estimate and
   missing-months block; WHM 2025–26 and unsupported 2023–24; prior-year and current-year tax losses; trust AMMA
@@ -98,7 +112,7 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 
 ### Performance (`tests/unit/performance.test.ts`)
 * 100,000 transactions (shares across 50 instruments, futures, expenses): lot + derivative engines **≈1.7 s**,
-  tax-year computation **≈0.18 s**, 25,456 disposals, no incomplete results (measured in the test container).
+  tax-year computation **≈0.27 s**, 25,456 disposals, no incomplete results (measured in the test container).
 
 ### Browser end-to-end (`tests/e2e`, production build)
 1. **Complete workflow** — record residency (autosave) → create an income record → autosaved edit → attach a
@@ -133,12 +147,13 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 
 ## Not tested / limitations of testing
 
-* **What the tax tests prove — and do not prove.** They show that the code reproduces the rates, thresholds and
-  formulas as read from ATO pages, and that two independent implementations agree. They do **not** prove those
-  figures are complete or current: the ATO pages were read through web-search summaries because ato.gov.au was
-  blocked in the build environment (see [VALIDATION_STATUS.md](VALIDATION_STATUS.md)). Nothing was compared with
-  ATO lodgment software or reviewed by a registered tax agent. Passing tests does not make the application
-  tax-ready.
+* **What the tax tests prove — and do not prove.** They show that the code reproduces the rates, thresholds,
+  formulas and worked examples in the ATO pages and legislation read in the audit, and that independent reference
+  implementations agree. They do **not** prove the application handles every taxpayer’s circumstances, and they
+  were not compared with ATO lodgment software or reviewed by a registered tax agent. Passing tests does not make
+  the application tax-ready. See [VALIDATION_STATUS.md](VALIDATION_STATUS.md).
+* Some ATO pages were supplied as partial printouts; rules beyond the printed pages were checked in the legislation
+  or remain unverified (listed in TAX_RULE_VERIFICATION §6).
 * Browsers other than Chromium (Firefox, Safari, mobile browsers) were not tested automatically.
 * Installation via the double-click launchers on real Windows/macOS machines was not performed (the launchers
   call the same `node scripts/serve.mjs` that was tested on Linux).

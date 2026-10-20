@@ -1,5 +1,5 @@
 /**
- * Individual tax components added in v1.2: part-year residency, Medicare levy family test,
+ * Individual tax components (v1.2, audited against official sources in v1.3): part-year residency, Medicare levy family test,
  * Medicare levy surcharge, compulsory HELP repayment and the foreign income tax offset limit.
  *
  * Every function returns null (or reliable=false) when a parameter for the year is missing or
@@ -64,26 +64,43 @@ export interface FamilyInput {
 }
 
 /**
- * Medicare levy with the family test. Applies the confirmed parts only: no levy when family taxable
- * income is at or below the family lower threshold, and no family reduction above the family limit.
- * Between the two the reduction formula has not been sourced, so the single result is returned as
- * an upper bound and marked unreliable.
+ * Medicare levy with the family reduction of Medicare Levy Act 1986 s 8:
+ *  - s 8(1): no levy if family income ≤ the family income threshold;
+ *  - s 8(2): otherwise the levy (after the s 7 low-income limit) is reduced by
+ *            2% × threshold − 0.08 × (family income − threshold), where positive;
+ *  - s 8(3): if married and the spouse would be liable to levy (taxable income above the threshold
+ *            amount, s 7(1)), the reduction is reduced by spouse taxable income ÷ family income.
+ * Family income = taxable income + spouse taxable income (a negative amount counts as $0, as in the
+ * ATO M1 worksheet). The excess-reduction transfer to the spouse (s 8(4)) does not affect this person.
  */
 export function medicareLevy(ti: Decimal, rs: TaxRuleSet, exemption: TaxProfile['medicareExemption'], family?: FamilyInput): LevyResult {
   const single = medicareLevySingle(ti, rs, exemption);
   if (!family?.hasFamily || exemption === 'full' || single.levy === null || single.levy.isZero()) return single;
-  if (exemption === 'half') return { ...single, note: `${single.note} Half exemption with family: family reduction not calculated.`, reliable: false };
+  if (exemption === 'half') return { ...single, note: `${single.note} Half exemption with family: the s 8 family reduction interacts with the exemption (s 9) — not calculated.`, reliable: false };
   if (family.spouse && family.spouseTaxableIncome === null) return { ...single, note: `${single.note} Spouse taxable income not entered — family reduction not tested (levy may be overstated).`, reliable: false };
   const fam = rs.medicareFamily;
-  if (!fam) return { ...single, note: `${single.note} Family thresholds not confirmed for this year — family reduction not tested (levy may be overstated).`, reliable: false };
-  const familyIncome = ti.plus(family.spouse ? family.spouseTaxableIncome! : ZERO);
+  const li = rs.medicareLowIncome;
+  if (!fam || fam.lower === null || fam.lowerPerChild === null || !li) return { ...single, note: `${single.note} Family income threshold not available for this year — family reduction not tested (levy may be overstated).`, reliable: false };
+  const spouseTi = family.spouse ? Decimal.max(ZERO, family.spouseTaxableIncome!) : ZERO;
+  const familyIncome = ti.plus(spouseTi);
   const kids = Math.max(0, Math.floor(family.children));
-  const lower = fam.lower !== null && fam.lowerPerChild !== null ? new Decimal(fam.lower).plus(new Decimal(fam.lowerPerChild).times(kids)) : null;
-  const upper = fam.upper !== null && fam.upperPerChild !== null ? new Decimal(fam.upper).plus(new Decimal(fam.upperPerChild).times(kids)) : null;
-  const fi = `family taxable income $${dstr(familyIncome)}`;
-  if (lower !== null && familyIncome.lte(lower)) return { levy: ZERO, note: `No levy: ${fi} is at or below the family threshold $${dstr(lower)} (${kids} dependent child${kids === 1 ? '' : 'ren'}).`, reliable: true };
-  if (upper !== null && familyIncome.gt(upper)) return { ...single, note: `${single.note} No family reduction: ${fi} exceeds the family limit $${dstr(upper)}.` };
-  return { ...single, note: `${single.note} A family reduction may apply (${fi}${upper !== null ? ` ≤ limit $${dstr(upper)}` : ''}) but its amount is not calculated — levy shown is an upper bound.`, reliable: false };
+  const fit = new Decimal(fam.lower).plus(new Decimal(fam.lowerPerChild).times(kids));
+  const fi = `family income $${dstr(familyIncome)}`;
+  const kidsTxt = `${kids} dependent child${kids === 1 ? '' : 'ren'}`;
+  if (familyIncome.lte(fit)) return { levy: ZERO, note: `No levy (s 8(1)): ${fi} is at or below the family income threshold $${dstr(fit)} (${kidsTxt}).`, reliable: true };
+  let reduction = fit.times(rs.medicareLevyRate).minus(familyIncome.minus(fit).times('0.08'));
+  if (reduction.lte(0)) return { ...single, note: `${single.note} No family reduction: ${fi} is above the point where the s 8(2) reduction reaches nil.` };
+  let apportioned = '';
+  if (family.spouse && spouseTi.gt(li.singleLower)) {
+    reduction = reduction.minus(reduction.times(spouseTi).div(familyIncome));
+    apportioned = ` reduced by the spouse’s share (s 8(3))`;
+  }
+  const levy = Decimal.max(ZERO, single.levy.minus(reduction));
+  return {
+    levy,
+    note: `Family reduction (s 8(2)): 2% × $${dstr(fit)} − 8% × ($${dstr(familyIncome)} − $${dstr(fit)})${apportioned} = $${reduction.toFixed(2)} off a levy of $${single.levy.toFixed(2)} (${kidsTxt}).`,
+    reliable: true
+  };
 }
 
 export interface MlsInput {
@@ -93,6 +110,8 @@ export interface MlsInput {
   netInvestmentLoss: Decimal;
   exemptForeignEmployment: Decimal;
   family: boolean;
+  /** Married (spouse on 30 June) — enables the s 8D(3)(c) own-income test. */
+  spouse?: boolean;
   spouseMlsIncome: Decimal | null;
   children: number;
   daysWithoutCover: number;
@@ -125,8 +144,11 @@ export function mlsAmount(rs: TaxRuleSet, m: MlsInput): MlsResult {
   for (let i = 0; i < 3; i++) if (tested.gt(tiers[i])) rate = p.rates[i];
   const label = m.family ? 'family' : 'single';
   if (rate === '0') return { amount: ZERO, rate, incomeForMls, threshold: dstr(tiers[0]), note: `Income for MLS purposes ($${dstr(tested)}, ${label}) does not exceed the base-tier threshold $${dstr(tiers[0])}.` };
-  if (m.family && rs.medicareLowIncome && m.ti.plus(m.rfb).lte(rs.medicareLowIncome.singleLower)) {
-    return { amount: null, rate, incomeForMls, threshold: dstr(tiers[0]), note: `Family income exceeds the threshold, but this person's income is at or below the Medicare low-income threshold $${rs.medicareLowIncome.singleLower}; the ATO says such a family member may not pay MLS. The exact test was not sourced — MLS not calculated.` };
+  if (m.spouse) {
+    // Medicare Levy Act s 8D(3)(c): a married person pays MLS only if their own income for surcharge
+    // purposes exceeds the threshold amount ($28,011 for 2025–26 — the single low-income threshold).
+    if (!rs.medicareLowIncome) return { amount: null, rate, incomeForMls, threshold: dstr(tiers[0]), note: 'Family income exceeds the MLS threshold, but the s 8D(3)(c) own-income amount for this year is not available — MLS not calculated.' };
+    if (incomeForMls.lte(rs.medicareLowIncome.singleLower)) return { amount: ZERO, rate: '0', incomeForMls, threshold: dstr(tiers[0]), note: `No MLS (Medicare Levy Act s 8D(3)(c)): own income for MLS purposes $${dstr(incomeForMls)} does not exceed $${rs.medicareLowIncome.singleLower}.` };
   }
   const days = Math.min(m.daysWithoutCover, m.daysInYear);
   const amount = m.ti.plus(m.rfb).times(rate).times(days).div(m.daysInYear);
@@ -139,10 +161,17 @@ export function mlsAmount(rs: TaxRuleSet, m: MlsInput): MlsResult {
   };
 }
 
-/** Compulsory study-loan repayment for a repayment income. Null when the year's schedule is not available. */
+/**
+ * Compulsory study-loan repayment for a repayment income. Up to 2024–25 one rate applies to the whole
+ * repayment income; from 2025–26 the marginal system applies. Null when the year's table is unavailable.
+ */
 export function helpRepayment(rs: TaxRuleSet, repaymentIncome: Decimal): Decimal | null {
   const h = rs.help;
   if (!h) return null;
+  if ('percentOfTotal' in h) {
+    const band = [...h.percentOfTotal].sort((a, b) => a.from - b.from).filter((b) => repaymentIncome.gte(b.from)).pop();
+    return band ? repaymentIncome.times(band.rate) : ZERO;
+  }
   if (repaymentIncome.lte(h.minimum)) return ZERO;
   if (repaymentIncome.gt(h.totalIncomeRate.above)) return repaymentIncome.times(h.totalIncomeRate.rate);
   const band = [...h.bands].sort((a, b) => a.above - b.above).filter((b) => repaymentIncome.gt(b.above)).pop();

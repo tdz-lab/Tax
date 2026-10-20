@@ -47,8 +47,10 @@ export interface Allocation {
 
 /** CGT applies to assets acquired on or after 20 September 1985 (ITAA 1997 Div 104 / s 104-10(5)). */
 export const CGT_START_DATE = '1985-09-20';
-/** Indexation may be chosen instead of the discount for assets acquired before 11:45 am 21 September 1999 (s 114-10, s 115-20). */
+/** Indexation may be chosen instead of the discount for assets acquired at or before 11:45 am (ACT time) on 21 September 1999 (ITAA 1997 s 110-36(1)). */
 export const INDEXATION_CUTOFF_DATE = '1999-09-21';
+/** Enacted CGT reforms apply to CGT events on or after this date (ITAA 1997 Subdiv 112-E deemed reacquisition; s 115-100). Not supported. */
+export const CGT_REFORM_DATE = '2027-07-01';
 
 export interface Disposal {
   id: string;
@@ -267,7 +269,7 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     const proceeds = input.proceedsAud === null ? null : input.proceedsAud.times(qty).div(input.quantity);
     const gain = proceeds === null || cost === null ? null : proceeds.minus(cost);
     const held = heldAtLeast12Months(lot.acquiredDate, disposedDate);
-    const preCgt = input.group === 'capital' && !!lot.acquiredDate && lot.acquiredDate < CGT_START_DATE;
+    const preCgt = input.group === 'capital' && !!lot.acquiredDate && lot.acquiredDate < CGT_START_DATE && disposedDate < CGT_REFORM_DATE;
     const eligible = input.group === 'capital' && held && !input.noDiscount && !preCgt;
     if (!eligible && !preCgt) allEligible = false;
     allocations.push({
@@ -320,8 +322,12 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     flags.push(`PRE_CGT: parcel(s) acquired before ${CGT_START_DATE} — gain/loss disregarded. Confirm the acquisition date (and that no corporate action or major improvement changed pre-CGT status).`);
     ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'PRE_CGT', message: `Disposal of ${inst.symbol} includes pre-CGT parcels (acquired before 20 September 1985) — gain/loss disregarded; confirm.` });
   }
-  if (input.group === 'capital' && allocations.some((a) => !a.preCgt && a.acquiredDate && a.acquiredDate < INDEXATION_CUTOFF_DATE && a.heldDays >= 365)) {
-    ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'INDEXATION_OPTION', message: `Disposal of ${inst.symbol} includes parcels acquired before 21 September 1999: the indexation method may be chosen instead of the discount. Indexation is not calculated (CPI factors not entered) — the discount method is used.` });
+  if (input.group === 'capital' && disposedDate < CGT_REFORM_DATE && allocations.some((a) => !a.preCgt && a.acquiredDate && a.acquiredDate >= CGT_START_DATE && a.acquiredDate <= INDEXATION_CUTOFF_DATE && a.heldDays >= 365)) {
+    ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'INDEXATION_OPTION', message: `Disposal of ${inst.symbol} includes parcels acquired at or before 21 September 1999 (11:45 am ACT time — the time of day is not checked): the indexation method may be chosen instead of the discount. Indexation is not calculated (CPI factors not entered) — the discount method is used.` });
+  }
+  if (input.group === 'capital' && disposedDate >= CGT_REFORM_DATE) {
+    flags.push('CGT_2027_REFORM: CGT event on or after 1 July 2027 — enacted reforms (deemed sale and reacquisition on 1 July 2027, discount changes) are not implemented.');
+    ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'CGT_2027_REFORM', message: `Disposal of ${inst.symbol} on or after 1 July 2027: the enacted CGT reforms (ITAA 1997 Subdiv 112-E deemed sale and reacquisition on 1 July 2027; s 115-100 discount changes) are not implemented — the gain shown is not reliable.` });
   }
   const taxClass = input.forceClass ?? classForGroup(input.group);
   if (input.group === 'unresolved') flags.push('Account tax treatment not determined — result requires classification (investor vs trader).');

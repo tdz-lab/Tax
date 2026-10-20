@@ -35,7 +35,8 @@ producing professional PDF reports for review by a registered tax agent.
 20. [Project layout](#20-project-layout)
 
 Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](docs/ARCHITECTURE.md) ·
-[Known limitations](docs/KNOWN_LIMITATIONS.md) · [Validation status](docs/VALIDATION_STATUS.md) · [Test report](docs/TESTING.md) ·
+[Known limitations](docs/KNOWN_LIMITATIONS.md) · [Validation status](docs/VALIDATION_STATUS.md) ·
+[Tax rule verification](docs/TAX_RULE_VERIFICATION.md) · [Test report](docs/TESTING.md) ·
 [Adding a connector](docs/CONNECTORS.md)
 
 ---
@@ -64,12 +65,13 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 * **No automatic download** of exchange rates or prices — you import published tables (e.g. RBA historical rates)
   or enter rates with their source. Missing rates are flagged, never guessed.
 * **No OCR** or automatic reading of PDF statements.
-* Some personal-tax items are **not calculated** or only partly calculated: HELP repayments outside 2025–26,
-  the Medicare family reduction between the family thresholds, SAPTO, private health insurance rebate,
-  non-commercial loss rules, forex gains on foreign currency balances (Div 775), indexation, ETP concessions. They
-  are flagged in the results. Full list: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
-* **Not tax-ready on its own.** Rates and thresholds were compared with ATO pages through web-search summaries and
-  nothing has been reviewed by a registered tax agent — see [docs/VALIDATION_STATUS.md](docs/VALIDATION_STATUS.md).
+* Some personal-tax items are **not calculated** or only partly calculated: 2026–27 Medicare low-income and family
+  reductions (thresholds not yet published), SAPTO, private health insurance rebate, non-commercial loss rules,
+  forex gains on foreign currency balances (Div 775), indexation, ETP concessions, any CGT event on or after
+  1 July 2027. They are flagged in the results. Full list: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+* **Not tax-ready on its own.** The rates and rules were audited against ATO pages and the legislation
+  ([docs/TAX_RULE_VERIFICATION.md](docs/TAX_RULE_VERIFICATION.md)), but nothing has been reviewed by a registered
+  tax agent — see [docs/VALIDATION_STATUS.md](docs/VALIDATION_STATUS.md).
 
 ## 3. System requirements
 
@@ -81,7 +83,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.2.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.3.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -217,11 +219,12 @@ See [docs/TAX_METHODOLOGY.md](docs/TAX_METHODOLOGY.md) for exactly how each item
   capital-account assets held at least 12 months (acquisition and disposal days excluded) by residents;
   losses applied before the discount; carry-forward computed year to year (or from an opening balance you enter).
 * Tax estimates use **versioned rule sets** (FY2022–23 to FY2026–27). Every parameter records how it was checked
-  (ATO page via search summary, legislation, conflicting, or not confirmed) — shown under *Tax Calculations → How
+  (verified in an ATO page or the legislation, partly verified, or not confirmed — with the source, section and date) — shown under *Tax Calculations → How
   each figure was checked* and in the PDF report. Unconfirmed parameters are left out (and the calculation flagged)
   or used with a warning; unimplemented items are listed.
-* The estimate includes the Medicare levy (single and family test), Medicare levy surcharge, study-loan repayment
-  (2025–26), the foreign income tax offset limit and carried-forward tax losses, each with the assumptions shown.
+* The estimate includes the Medicare levy (single and the s 8 family reduction), Medicare levy surcharge, study-loan
+  repayments (2022–23 to 2026–27), the foreign income tax offset limit and carried-forward tax losses, each with the
+  assumptions shown.
 * *Tax Calculations* shows recorded totals, calculated amounts, estimates, items awaiting review and readiness
   separately; every line opens its source records. *Save calculation snapshot* stores an immutable snapshot with
   the rule-set version, an input fingerprint and your reason; earlier snapshots are never rewritten.
