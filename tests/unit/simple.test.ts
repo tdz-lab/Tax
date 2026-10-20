@@ -5,7 +5,7 @@ import { computeTaxYear } from '../../src/engines/tax/taxEngine';
 import { headline, returnFigures } from '../../src/engines/tax/simpleFigures';
 import { buildTodos, missingSetup } from '../../src/ui/simple/todo';
 import { capFirst, moneyUseOf } from '../../src/ui/pages/Money';
-import { builtinCategories } from '../../src/domain/reference';
+import { builtinCategories, categoryOptions, isBusinessCategory } from '../../src/domain/reference';
 import type { Transaction } from '../../src/domain/types';
 import type { AppDB } from '../../src/db/schema';
 import { loadDemoData } from '../../src/services/demo';
@@ -107,5 +107,44 @@ describe('money accounts', () => {
     expect(moneyUseOf({ type: 'bank' })).toBe('both');
     expect(moneyUseOf({ type: 'payment' })).toBe('both');
     expect(moneyUseOf({ type: 'income_source', moneyUse: 'both' })).toBe('both');
+  });
+});
+
+describe('expense categories for side projects', () => {
+  const cats = builtinCategories();
+  const exp = (code: string) => cats.find((c) => c.type === 'expense' && c.code === code)!;
+  it('include the online-business categories under headings; equipment and the business home office are flagged for review', () => {
+    const names = ['Paid ads (PPC)', 'Influencer & affiliate payouts', 'Native & solo ads', 'Web hosting & servers', 'Domains & registrations', 'Web development & design', 'Security & compliance', 'Email marketing & funnel builders', 'SEO & analytics tools', 'Content creation software', 'Operations & project management', 'Freelance content & design', 'Virtual assistants (VAs)', 'Agency fees', 'Courses & certifications', 'Masterminds & communities', 'Events & conferences', 'Computers & mobile devices', 'A/V production gear', 'Networking hardware', 'Merchant & processing fees', 'Financial & legal software', 'Home office (side business)'];
+    const have = new Set(cats.map((c) => c.name));
+    expect(names.filter((n) => !have.has(n))).toEqual([]);
+    expect(exp('ads_ppc')).toMatchObject({ group: 'Marketing & advertising', defaultTaxClass: 'BUSINESS_EXPENSE' });
+    expect(exp('computers').defaultTaxClass).toBe('REVIEW');
+    expect(exp('business_home_office').defaultTaxClass).toBe('REVIEW');
+    expect(isBusinessCategory(exp('computers'))).toBe(true);
+    expect(isBusinessCategory(exp('personal'))).toBe(false);
+    // The earlier categories are all still there.
+    for (const code of ['work_general', 'home_office', 'software', 'trading_fees', 'prop_eval_fee', 'bank_fees', 'personal', 'other']) expect(exp(code)).toBeDefined();
+  });
+  it('pick lists are grouped with the business headings first and every category exactly once', () => {
+    const opts = categoryOptions(cats.filter((c) => c.type === 'expense'));
+    expect(opts.length).toBe(cats.filter((c) => c.type === 'expense').length);
+    const groups = [...new Set(opts.map((o) => o.group))];
+    expect(groups.slice(0, 3)).toEqual(['Business & side projects', 'Marketing & advertising', 'Websites & hosting']);
+    // Each heading appears as one run (no heading split in two).
+    const runs = opts.map((o) => o.group).filter((g, i, a) => i === 0 || a[i - 1] !== g);
+    expect(runs.length).toBe(groups.length);
+  });
+  it('business expenses are broken down by category in the figures (display only — the total is unchanged)', () => {
+    const r = year([
+      txn({ kind: 'expense', date: '2024-09-01', category: 'ads_ppc', taxClass: 'BUSINESS_EXPENSE', amount: '300', businessUsePct: '100', isBusiness: true }),
+      txn({ kind: 'expense', date: '2024-09-02', category: 'web_hosting', taxClass: 'BUSINESS_EXPENSE', amount: '120', businessUsePct: '100', isBusiness: true }),
+      txn({ kind: 'expense', date: '2024-09-03', category: 'ads_ppc', taxClass: 'BUSINESS_EXPENSE', amount: '200', businessUsePct: '100', isBusiness: true })
+    ]);
+    const side = returnFigures(r).find((g) => g.title === 'Side projects and business')!;
+    const rows = side.rows.map((x) => [x.label.trim(), x.amount && D(x.amount).toFixed(2)]);
+    expect(rows).toContainEqual(['Expenses', '620.00']);
+    expect(rows).toContainEqual(['Paid ads (PPC)', '500.00']);
+    expect(rows).toContainEqual(['Web hosting & servers', '120.00']);
+    expect(D(r.business.find((l) => l.key === 'bus_net')!.amount!).toFixed(2)).toBe('-620.00');
   });
 });

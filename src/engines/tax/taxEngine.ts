@@ -612,6 +612,17 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
   if (bIncome.length || bExp.length || depreciation.length) {
     business.push(line('bus_income', 'Business income (GST-exclusive where registered)', bIncomeTotal, 'recorded', bIncome.map((t) => t.id)));
     business.push(line('bus_expenses', 'Business expenses (net of private use)', bExpTotal, 'recorded', [...new Set(bExp.map((d) => d.txnId))]));
+    // Breakdown by category for the reports (display only — the total above is what counts).
+    const bByCat = new Map<string, { total: Decimal | null; ids: string[] }>();
+    for (const d of bExp) {
+      const e = bByCat.get(d.category) ?? { total: ZERO, ids: [] };
+      e.total = add(e.total, d.amount);
+      e.ids.push(d.txnId);
+      bByCat.set(d.category, e);
+    }
+    for (const [cat, e] of [...bByCat].sort((a, b) => (b[1].total?.toNumber() ?? 0) - (a[1].total?.toNumber() ?? 0))) {
+      business.push(line(`bus_cat_${cat}`, `  · ${catByCode.get(`expense:${cat}`)?.name ?? cat}`, e.total, 'recorded', e.ids));
+    }
     business.push(line('bus_depreciation', 'Depreciation / capital allowances (business portion)', depTotal, 'calculated', depreciation.map((d) => d.assetId), 'See asset depreciation schedule.'));
     const net = bIncomeTotal === null || bExpTotal === null ? null : bIncomeTotal.minus(bExpTotal).minus(depTotal);
     business.push(line('bus_net', 'Net business income / (loss)', net, 'calculated', [], 'Income − expenses − depreciation.'));

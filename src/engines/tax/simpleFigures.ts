@@ -84,6 +84,7 @@ export function returnFigures(r: TaxYearResult): FigureGroup[] {
   push('Side projects and business', [
     { label: 'Income', amount: lineAmt(r.business, 'bus_income'), where: 'Business and professional items' },
     { label: 'Expenses', amount: lineAmt(r.business, 'bus_expenses'), where: 'Business and professional items' },
+    ...r.business.filter((l) => l.key.startsWith('bus_cat_')).map((l) => ({ label: `   ${l.label.replace(/^\s*·\s*/, '')}`, amount: l.amount, where: 'Part of expenses' })),
     { label: 'Depreciation', amount: lineAmt(r.business, 'bus_depreciation'), where: 'Business and professional items' },
     { label: 'Net profit / (loss)', amount: lineAmt(r.business, 'bus_net'), where: 'Business and professional items', strong: true }
   ]);

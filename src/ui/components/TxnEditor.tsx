@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
-import { ACCOUNT_TYPE_LABEL, ASSET_CLASS_LABEL, FIAT_CURRENCIES, KIND_LABEL, SIDE_LABEL, TAX_CLASS_INFO } from '../../domain/reference';
+import { ACCOUNT_TYPE_LABEL, ASSET_CLASS_LABEL, FIAT_CURRENCIES, KIND_LABEL, SIDE_LABEL, TAX_CLASS_INFO, categoryOptions } from '../../domain/reference';
 import { ASSET_CLASSES, TAX_CLASSES, type AdjustmentType, type CostBasisMethod, type GstTreatment, type Instrument, type Side, type Split, type TaxClass, type Transaction, type TxnKind } from '../../domain/types';
 import { D, formatMoney, formatQty, tryD } from '../../lib/decimal';
 import { formatInstant, nowIso, localDateOf } from '../../lib/dates';
@@ -215,7 +215,7 @@ export function TxnEditor({ initial, onClose }: { initial: Draft; onClose: () =>
         <Select label="Time zone" value={draft.timeZone} onChange={(v) => set({ timeZone: v })} options={[...new Set([draft.timeZone ?? settings.taxTimeZone, ...TIMEZONES])].map((z) => ({ value: z, label: z }))} />
         <TextInput label="Description" value={draft.description} onChange={(v) => set({ description: v })} className="span-2" />
         {(kind === 'income' || kind === 'expense' || kind === 'fee') && (
-          <Select label="Category" value={draft.category} includeEmpty="Choose…" onChange={(v) => set({ category: v })} options={cats.map((c) => ({ value: c.code, label: `${c.group} · ${c.name}` }))} className="span-2" required />
+          <Select label="Category" value={draft.category} includeEmpty="Choose…" onChange={(v) => set({ category: v })} options={categoryOptions(cats)} className="span-2" required />
         )}
         {(kind === 'trade' || kind === 'transfer' || kind === 'cash' || kind === 'adjustment' || kind === 'income' || kind === 'fee' || kind === 'expense') && (
           <Select label="Account" value={draft.accountId ?? ''} includeEmpty={kind === 'trade' || kind === 'cash' || kind === 'transfer' ? 'Choose…' : '(none)'} onChange={(v) => set({ accountId: v || undefined })} options={accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: `${a.name} — ${ACCOUNT_TYPE_LABEL[a.type]}` }))} className="span-2" required={kind === 'trade' || kind === 'cash' || kind === 'transfer'} />
@@ -304,7 +304,7 @@ export function TxnEditor({ initial, onClose }: { initial: Draft; onClose: () =>
             <DecimalInput label="GST amount" value={draft.gstAmount} onChange={(v) => set({ gstAmount: v })} hint={draft.amount && draft.gstTreatment === 'taxable' ? <button className="link" type="button" onClick={() => set({ gstAmount: gstFromInclusive(draft.amount!) })}>Use 1/11 of amount ({gstFromInclusive(draft.amount)})</button> : undefined} />
             <TextInput label="Payment method" value={draft.paymentMethod} onChange={(v) => set({ paymentMethod: v || undefined })} />
           </div>
-          {kind !== 'income' && <SplitEditor splits={draft.splits ?? []} total={draft.amount} onChange={(s) => set({ splits: s.length ? s : undefined })} cats={cats.map((c) => ({ value: c.code, label: c.name }))} />}
+          {kind !== 'income' && <SplitEditor splits={draft.splits ?? []} total={draft.amount} onChange={(s) => set({ splits: s.length ? s : undefined })} cats={categoryOptions(cats)} />}
         </fieldset>
       )}
 
@@ -415,7 +415,7 @@ export function InstrumentPicker({ value, onChange, instruments, label = 'Instru
   );
 }
 
-function SplitEditor({ splits, total, onChange, cats }: { splits: Split[]; total?: string; onChange: (s: Split[]) => void; cats: { value: string; label: string }[] }) {
+function SplitEditor({ splits, total, onChange, cats }: { splits: Split[]; total?: string; onChange: (s: Split[]) => void; cats: { value: string; label: string; group?: string }[] }) {
   const sum = splits.reduce((s, x) => s.plus(D(x.amount)), D(0));
   return (
     <div style={{ marginTop: 8 }}>

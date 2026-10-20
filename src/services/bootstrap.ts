@@ -10,9 +10,15 @@ export async function ensureSeeded(): Promise<void> {
   const now = nowIso();
   await db.transaction('rw', [db.categories, db.importTemplates, db.connectors, db.meta], async () => {
     const cats = builtinCategories();
-    const existingCats = new Set(await db.categories.toCollection().primaryKeys());
-    const missing = cats.filter((c) => !existingCats.has(c.id));
+    const existing = new Map((await db.categories.toArray()).map((c) => [c.id, c]));
+    const missing = cats.filter((c) => !existing.has(c.id));
     if (missing.length) await db.categories.bulkPut(missing);
+    // Built-in categories keep up with new versions (name, heading, guidance); the user's archive flag and tax class stay.
+    const refreshed = cats.flatMap((c) => {
+      const e = existing.get(c.id);
+      return e && e.builtin && (e.name !== c.name || e.group !== c.group || e.guidance !== c.guidance) ? [{ ...e, name: c.name, group: c.group, guidance: c.guidance }] : [];
+    });
+    if (refreshed.length) await db.categories.bulkPut(refreshed);
     for (const tpl of BUILTIN_TEMPLATES) await db.importTemplates.put({ ...tpl, createdAt: now, updatedAt: now });
     const existingConn = new Set((await db.connectors.toArray()).map((c) => c.providerId));
     for (const p of PROVIDERS) {

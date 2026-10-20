@@ -601,3 +601,23 @@ test('start again: delete selected data, then everything', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible({ timeout: 15_000 });
   expect(errors).toEqual([]);
 });
+
+test('money out: categories grouped under headings; business expenses broken down in the tax summary', async ({ page }) => {
+  await page.goto('./');
+  await selectFY(page, '2025');
+  await page.goto('./#/money');
+  await page.getByRole('button', { name: '+ Money out' }).first().click();
+  const d = page.getByRole('dialog');
+  const sel = d.getByLabel('What was it for?');
+  await expect(sel.locator('optgroup[label="Marketing & advertising"] option')).toHaveText(['Paid ads (PPC)', 'Influencer & affiliate payouts', 'Native & solo ads']);
+  await expect(sel.locator('optgroup[label="Equipment"] option')).toHaveCount(3);
+  await expect(sel.locator('optgroup[label="Trading"] option').first()).toBeAttached();
+  await d.getByLabel('Date').fill('2024-09-01');
+  await d.getByLabel('Amount').fill('450');
+  await sel.selectOption({ label: 'Paid ads (PPC)' });
+  await d.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'Paid ads (PPC)' }).first()).toBeVisible();
+  await page.goto('./#/tax-summary');
+  const side = page.locator('.panel', { has: page.getByRole('heading', { name: 'Side projects and business' }) });
+  await expect(side.getByRole('row', { name: /Paid ads \(PPC\)/ })).toContainText('$450.00');
+});

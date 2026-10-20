@@ -172,7 +172,7 @@ const EXPENSE_CATS: CatSeed[] = [
   ['work_general', 'Work-related expenses', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100', 'Must relate directly to earning employment income; reimbursed amounts are not deductible.'],
   ['work_vehicle', 'Work-related vehicle expenses', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100', 'Cents-per-km or logbook method; normal commuting is private.'],
   ['work_travel', 'Work-related travel', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100'],
-  ['home_office', 'Home office expenses', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100', 'Fixed-rate or actual-cost method; keep a record of hours.'],
+  ['home_office', 'Home office expenses (employee)', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100', 'Fixed-rate or actual-cost method; keep a record of hours.'],
   ['work_equipment', 'Work-related equipment', 'Work-related', 'REVIEW', '100', 'Items over $300 are generally depreciated — record in the asset register.'],
   ['education', 'Self-education and training', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100'],
   ['memberships', 'Professional memberships / union fees', 'Work-related', 'DEDUCTIBLE_EXPENSE', '100'],
@@ -180,7 +180,31 @@ const EXPENSE_CATS: CatSeed[] = [
   ['donations', 'Gifts and donations', 'Donations', 'DEDUCTIBLE_EXPENSE', '100', 'Only to deductible gift recipients (DGR) and $2 or more; no material benefit.'],
   ['investment', 'Investment-related expenses', 'Investment', 'DEDUCTIBLE_EXPENSE', '100'],
   ['business_operating', 'Business operating expenses', 'Business', 'BUSINESS_EXPENSE', '100'],
-  ['software', 'Software and subscriptions', 'Business', 'BUSINESS_EXPENSE', '100'],
+  // Side projects / online business — grouped as they appear under “What was it for?”.
+  ['ads_ppc', 'Paid ads (PPC)', 'Marketing & advertising', 'BUSINESS_EXPENSE', '100', 'e.g. Google Ads, Meta, TikTok, Microsoft Ads.'],
+  ['affiliate_payouts', 'Influencer & affiliate payouts', 'Marketing & advertising', 'BUSINESS_EXPENSE', '100', 'Commissions and fees you pay to influencers, affiliates or publishers.'],
+  ['ads_native_solo', 'Native & solo ads', 'Marketing & advertising', 'BUSINESS_EXPENSE', '100', 'e.g. Taboola, Outbrain, MGID, solo email ads.'],
+  ['web_hosting', 'Web hosting & servers', 'Websites & hosting', 'BUSINESS_EXPENSE', '100'],
+  ['domains', 'Domains & registrations', 'Websites & hosting', 'BUSINESS_EXPENSE', '100'],
+  ['web_dev', 'Web development & design', 'Websites & hosting', 'BUSINESS_EXPENSE', '100', 'Building a new website or app can be a capital cost rather than an immediate deduction — your tax agent decides.'],
+  ['security_compliance', 'Security & compliance', 'Websites & hosting', 'BUSINESS_EXPENSE', '100', 'e.g. SSL, backups, VPN, privacy/cookie compliance tools.'],
+  ['software', 'Software and subscriptions', 'Software & tools', 'BUSINESS_EXPENSE', '100'],
+  ['email_funnels', 'Email marketing & funnel builders', 'Software & tools', 'BUSINESS_EXPENSE', '100', 'e.g. email platforms, landing-page and funnel builders.'],
+  ['seo_analytics', 'SEO & analytics tools', 'Software & tools', 'BUSINESS_EXPENSE', '100'],
+  ['content_software', 'Content creation software', 'Software & tools', 'BUSINESS_EXPENSE', '100', 'e.g. design, video and writing tools.'],
+  ['ops_pm', 'Operations & project management', 'Software & tools', 'BUSINESS_EXPENSE', '100'],
+  ['fin_legal_software', 'Financial & legal software', 'Software & tools', 'BUSINESS_EXPENSE', '100', 'e.g. accounting, invoicing, contracts.'],
+  ['freelance_content', 'Freelance content & design', 'Contractors & services', 'BUSINESS_EXPENSE', '100'],
+  ['virtual_assistants', 'Virtual assistants (VAs)', 'Contractors & services', 'BUSINESS_EXPENSE', '100'],
+  ['agency_fees', 'Agency fees', 'Contractors & services', 'BUSINESS_EXPENSE', '100'],
+  ['courses', 'Courses & certifications', 'Learning & networking', 'BUSINESS_EXPENSE', '100', 'Generally deductible only when connected to the business you already run — check with your tax agent.'],
+  ['masterminds', 'Masterminds & communities', 'Learning & networking', 'BUSINESS_EXPENSE', '100', 'Generally deductible only when connected to the business you already run — check with your tax agent.'],
+  ['events', 'Events & conferences', 'Learning & networking', 'BUSINESS_EXPENSE', '100', 'Tickets and registration; record travel separately. Meals and entertainment are treated differently — ask your tax agent.'],
+  ['computers', 'Computers & mobile devices', 'Equipment', 'REVIEW', '100', 'Equipment usually has to be depreciated (record it in the asset register) rather than claimed at once; whether an immediate write-off applies depends on the year and your business — your tax agent decides.'],
+  ['av_gear', 'A/V production gear', 'Equipment', 'REVIEW', '100', 'Equipment usually has to be depreciated (record it in the asset register) rather than claimed at once; whether an immediate write-off applies depends on the year and your business — your tax agent decides.'],
+  ['network_hw', 'Networking hardware', 'Equipment', 'REVIEW', '100', 'Equipment usually has to be depreciated (record it in the asset register) rather than claimed at once; whether an immediate write-off applies depends on the year and your business — your tax agent decides.'],
+  ['business_home_office', 'Home office (side business)', 'Home office', 'REVIEW', '100', 'Only the business-use share counts; running costs and occupancy costs are treated differently. Keep records of hours or floor area — your tax agent decides the method.'],
+  ['merchant_fees', 'Merchant & processing fees', 'Financial', 'BUSINESS_EXPENSE', '100', 'e.g. Stripe, PayPal, Shopify Payments fees on business sales.'],
   ['trading_fees', 'Trading fees and commissions (standalone)', 'Trading', 'REVIEW', '100', 'Brokerage on CGT assets forms part of cost base/proceeds; for traders it is a revenue deduction.'],
   ['data_feeds', 'Market data / trading platform fees', 'Trading', 'REVIEW', '100'],
   ['prop_eval_fee', 'Prop-firm evaluation / challenge fee', 'Trading', 'REVIEW', '100', 'Deductibility depends on whether a business is carried on. Classify explicitly.'],
@@ -209,6 +233,48 @@ export function builtinCategories(): Category[] {
   });
   return [...INCOME_CATS.map((c) => mk('income', c)), ...EXPENSE_CATS.map((c) => mk('expense', c))];
 }
+
+/** Order and headings of category groups in pick lists (“What was it for?”). Unknown groups go last. */
+const GROUP_ORDER: { group: string; label: string }[] = [
+  // Side projects / business first (income and expenses), then trading, then everything else.
+  { group: 'Business', label: 'Business & side projects' },
+  { group: 'Marketing & advertising', label: 'Marketing & advertising' },
+  { group: 'Websites & hosting', label: 'Websites & hosting' },
+  { group: 'Software & tools', label: 'Software & tools' },
+  { group: 'Contractors & services', label: 'Contractors & services' },
+  { group: 'Learning & networking', label: 'Learning & networking' },
+  { group: 'Equipment', label: 'Equipment' },
+  { group: 'Home office', label: 'Home office' },
+  { group: 'Financial', label: 'Banking, fees & interest' },
+  { group: 'Trading', label: 'Trading' },
+  { group: 'Crypto', label: 'Crypto' },
+  { group: 'Employment', label: 'Work (employment)' },
+  { group: 'Work-related', label: 'Work (employee) expenses' },
+  { group: 'Investment', label: 'Investments' },
+  { group: 'Foreign', label: 'Foreign' },
+  { group: 'Property', label: 'Property' },
+  { group: 'Government', label: 'Government' },
+  { group: 'Cost of managing tax affairs', label: 'Tax & accounting' },
+  { group: 'Assets', label: 'Depreciation' },
+  { group: 'Donations', label: 'Donations' },
+  { group: 'Private', label: 'Personal (not deductible)' },
+  { group: 'Other', label: 'Other' }
+];
+const GROUP_RANK = new Map(GROUP_ORDER.map((g, i) => [g.group, i]));
+/** Within a heading, built-in categories keep the order they are listed in above; your own come after, A–Z. */
+const SEED_RANK = new Map([...INCOME_CATS, ...EXPENSE_CATS].map((c, i) => [c[0], i]));
+export const groupLabel = (group: string) => GROUP_ORDER.find((g) => g.group === group)?.label ?? group;
+
+/** Category pick-list options grouped under headings, in a sensible order. */
+export function categoryOptions(cats: Pick<Category, 'code' | 'name' | 'group'>[]): { value: string; label: string; group: string }[] {
+  return [...cats]
+    .sort((a, b) => (GROUP_RANK.get(a.group) ?? 99) - (GROUP_RANK.get(b.group) ?? 99) || a.group.localeCompare(b.group) || (SEED_RANK.get(a.code) ?? 999) - (SEED_RANK.get(b.code) ?? 999) || a.name.localeCompare(b.name))
+    .map((c) => ({ value: c.code, label: c.name, group: groupLabel(c.group) }));
+}
+
+/** Expense groups that are business costs (so the record is marked as a business record). */
+const BUSINESS_EXPENSE_GROUPS = new Set(['Business', 'Marketing & advertising', 'Websites & hosting', 'Software & tools', 'Contractors & services', 'Learning & networking', 'Equipment', 'Home office']);
+export const isBusinessCategory = (c: Pick<Category, 'group' | 'defaultTaxClass'> | undefined) => !!c && (BUSINESS_EXPENSE_GROUPS.has(c.group) || c.defaultTaxClass === 'BUSINESS_EXPENSE' || c.defaultTaxClass === 'BUSINESS_INCOME');
 
 /** Category codes for trading-generated records. */
 export const TRADING_CATEGORY = 'trading';

@@ -3,7 +3,7 @@ import { DEFAULT_METHODOLOGY } from '../engines/currency/rates';
 import { DEFAULT_TAX_TZ } from '../lib/dates';
 import { getDb } from '../db/schema';
 
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.9.0';
 
 export const DEFAULT_SETTINGS: AppSettings = {
   taxTimeZone: DEFAULT_TAX_TZ,

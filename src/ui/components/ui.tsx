@@ -133,17 +133,33 @@ export function DecimalInput({ label, value, onChange, hint, className, allowNeg
   );
 }
 
-export function Select<T extends string>({ label, value, onChange, options, hint, className, includeEmpty, required, disabled }: { label: ReactNode; value: T | undefined | ''; onChange: (v: T) => void; options: { value: T; label: string }[]; hint?: ReactNode; className?: string; includeEmpty?: string; required?: boolean; disabled?: boolean }) {
+/** Drop-down. Options with a `group` are shown under that heading (consecutive options share one heading). */
+export function Select<T extends string>({ label, value, onChange, options, hint, className, includeEmpty, required, disabled }: { label: ReactNode; value: T | undefined | ''; onChange: (v: T) => void; options: { value: T; label: string; group?: string }[]; hint?: ReactNode; className?: string; includeEmpty?: string; required?: boolean; disabled?: boolean }) {
+  const runs: { group?: string; items: typeof options }[] = [];
+  for (const o of options) {
+    const last = runs[runs.length - 1];
+    if (last && last.group === o.group) last.items.push(o);
+    else runs.push({ group: o.group, items: [o] });
+  }
+  const opt = (o: (typeof options)[number]) => (
+    <option key={o.value} value={o.value}>
+      {o.label}
+    </option>
+  );
   return (
     <Field label={<>{label}{required && <span aria-hidden> *</span>}</>} hint={hint} className={className}>
       {(id) => (
         <select id={id} value={value ?? ''} disabled={disabled} onChange={(e) => onChange(e.target.value as T)}>
           {includeEmpty !== undefined && <option value="">{includeEmpty}</option>}
-          {options.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
+          {runs.map((r, i) =>
+            r.group ? (
+              <optgroup key={`${r.group}-${i}`} label={r.group}>
+                {r.items.map(opt)}
+              </optgroup>
+            ) : (
+              r.items.map(opt)
+            )
+          )}
         </select>
       )}
     </Field>

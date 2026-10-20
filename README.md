@@ -85,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.8.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.9.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -126,6 +126,11 @@ calculations are identical.
   own accounts — from, to, date, amount, note — as one entry that is never income or an expense (stored as two
   linked own-transfer records, like a transfer in Xero or QuickBooks); + Money in and + Money out only
   offer the matching accounts (never trading accounts), and each group scrolls once it has more than about five.
+  “What was it for?” lists categories under headings — Marketing & advertising (paid ads, affiliate payouts, native/
+  solo ads), Websites & hosting, Software & tools, Contractors & services, Learning & networking, Equipment, Home
+  office, Banking & fees, Trading, employee work expenses, Personal and more. Business expenses are broken down by
+  category on the Tax summary and in the PDFs. Equipment and the business home office are marked for your tax agent
+  to decide (depreciation / business-use share) rather than counted as an outright deduction.
   Brokers, exchanges, wallets and prop-firm accounts are listed under **Trading accounts** (Edit / Delete there);
   **Edit → Delete…** removes an account with no records, or hides it, or deletes it together with its records,
   which go to *Deleted* and can be restored — restoring one brings the account back; purging deleted records in

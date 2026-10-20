@@ -5,7 +5,7 @@
 import { useMemo, useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getDb } from '../../db/schema';
-import { ACCOUNT_TYPE_LABEL, isTradingAccountType } from '../../domain/reference';
+import { ACCOUNT_TYPE_LABEL, categoryOptions, isBusinessCategory, isTradingAccountType } from '../../domain/reference';
 import type { Account, AccountType, Transaction } from '../../domain/types';
 import { D, Decimal, formatMoney } from '../../lib/decimal';
 import { fyLabel, fyLongLabel, fyEnd, fyStart, nowIso } from '../../lib/dates';
@@ -198,7 +198,7 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
             value={a.defaultExpenseCategory ?? ''}
             onChange={(v) => setA({ ...a, defaultExpenseCategory: v || undefined })}
             includeEmpty="Ask me each time"
-            options={expenseCats.map((c) => ({ value: c.code, label: `${c.name} (${c.group})` }))}
+            options={categoryOptions(expenseCats)}
           />
         )}
         {!trading && moneyUseOf(a as Account) !== 'out' && (
@@ -253,7 +253,7 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
           currency: f.currency.toUpperCase(),
           category: f.category,
           accountId: f.accountId || undefined,
-          isBusiness: cat?.group === 'Business' || undefined,
+          isBusiness: isBusinessCategory(cat) || undefined,
           timeZone: settings.taxTimeZone,
           tags: [],
           documentIds: [],
@@ -284,7 +284,7 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
         <DecimalInput label="Amount" value={f.amount} onChange={(v) => setF({ ...f, amount: v })} required />
         <TextInput label="Currency" value={f.currency} onChange={(v) => setF({ ...f, currency: v.toUpperCase() })} />
         <TextInput label="Description" value={f.description} onChange={(v) => setF({ ...f, description: v })} placeholder={direction === 'in' ? 'e.g. October commissions' : 'e.g. Web hosting'} />
-        <Select label={direction === 'in' ? 'What is it?' : 'What was it for?'} className="span-2" value={f.category} includeEmpty="Choose…" required onChange={(v) => setF({ ...f, category: v })} options={categories.map((c) => ({ value: c.code, label: `${c.name} (${c.group})` }))} />
+        <Select label={direction === 'in' ? 'What is it?' : 'What was it for?'} className="span-2" value={f.category} includeEmpty="Choose…" required onChange={(v) => setF({ ...f, category: v })} options={categoryOptions(categories)} />
       </div>
       {f.currency.toUpperCase() !== 'AUD' && <div className="notice">Amounts in {f.currency.toUpperCase()} are converted to AUD with the exchange rate for the date (import rates under Import files if one is missing).</div>}
     </Modal>
