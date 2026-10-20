@@ -667,7 +667,7 @@ function ProvenancePanel({ t }: { t: Transaction }) {
 function AuditPanel({ id }: { id: string }) {
   const { settings } = useApp();
   const events = useLiveQuery(() => getDb().audit.where('entityId').equals(id).toArray(), [id]);
-  const list = useMemo(() => [...(events ?? [])].sort((a, b) => (a.at < b.at ? 1 : -1)), [events]);
+  const list = useMemo(() => [...(events ?? [])].sort((a, b) => (a.id < b.id ? 1 : -1)), [events]);
   return (
     <div className="panel">
       <h3>Audit history</h3>

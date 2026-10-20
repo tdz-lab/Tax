@@ -51,8 +51,15 @@ function diff(before: any, after: any): { before: Record<string, unknown>; after
   return { before: b, after: a };
 }
 
+let auditSeq = 0;
+/** Audit ids sort chronologically (timestamp + per-session counter), so history order is stable. */
+export function auditId(): string {
+  auditSeq = (auditSeq + 1) % 1_000_000;
+  return `aud_${Date.now().toString().padStart(15, '0')}_${String(auditSeq).padStart(6, '0')}_${newId().slice(0, 8)}`;
+}
+
 export async function writeAudit(e: Omit<AuditEvent, 'id' | 'at'> & { at?: string }): Promise<void> {
-  await getDb().audit.add({ id: newId('aud'), at: e.at ?? nowIso(), ...e });
+  await getDb().audit.add({ id: auditId(), at: e.at ?? nowIso(), ...e });
 }
 
 // ---------------- rate index cache ----------------

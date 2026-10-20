@@ -7,7 +7,7 @@ import { nowIso } from '../lib/dates';
 import { base64ToBuf, bufToBase64, timestampForFile } from '../lib/files';
 import type { BackupManifest } from '../domain/types';
 import { APP_VERSION, saveSettings } from '../services/settings';
-import { bumpRevision, invalidateRateCache, writeAudit } from '../services/ledger';
+import { auditId, bumpRevision, invalidateRateCache, writeAudit } from '../services/ledger';
 import { decryptText, encryptText, type EncryptedEnvelope } from './crypto';
 
 export const BACKUP_FORMAT = 'au-tax-ledger-backup';
@@ -151,7 +151,7 @@ export async function restoreBackup(payload: BackupPayload, mode: 'replace' | 'm
       await db.docBlobs.put({ id: d.id, data: base64ToBuf(d.data) });
       report.documentsRestored++;
     }
-    await db.audit.add({ id: newId('aud'), at: nowIso(), entityType: 'backup', entityId: payload.payloadHash.slice(0, 16), action: 'restore', summary: `Backup from ${payload.createdAt} restored (${mode}).` });
+    await db.audit.add({ id: auditId(), at: nowIso(), entityType: 'backup', entityId: payload.payloadHash.slice(0, 16), action: 'restore', summary: `Backup from ${payload.createdAt} restored (${mode}).` });
     await bumpRevision('rates');
   });
   invalidateRateCache();

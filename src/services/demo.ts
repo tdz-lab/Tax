@@ -3,11 +3,10 @@
  * (isDemo, tag "DEMO", "[DEMO]" descriptions, "DEMO fictional rate" sources). Removable in one action.
  */
 import { getDb } from '../db/schema';
-import { newId } from '../lib/ids';
 import { nowIso } from '../lib/dates';
 import type { Account } from '../domain/types';
 import { importWithTemplate } from '../import/service';
-import { bumpRevision, invalidateRateCache, refreshAllConversions, saveEntity, writeAudit } from './ledger';
+import { auditId, bumpRevision, invalidateRateCache, refreshAllConversions, saveEntity, writeAudit } from './ledger';
 
 type Fetcher = (file: string) => Promise<string>;
 
@@ -126,7 +125,7 @@ export async function removeDemoData(): Promise<number> {
     const tp = await db.taxProfiles.get('tp_2025');
     if (tp?.notes === 'DEMO profile') await db.taxProfiles.delete('tp_2025');
     await db.meta.delete('demoBatches');
-    await db.audit.add({ id: newId('aud'), at: nowIso(), entityType: 'demo', entityId: 'demo', action: 'delete', summary: `Removed demonstration data (${n} records)` });
+    await db.audit.add({ id: auditId(), at: nowIso(), entityType: 'demo', entityId: 'demo', action: 'delete', summary: `Removed demonstration data (${n} records)` });
     await bumpRevision('rates');
   });
   invalidateRateCache();
