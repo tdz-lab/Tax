@@ -57,6 +57,7 @@ export const ACCOUNT_TYPES = [
   'bank',
   'cash',
   'income_source',
+  'expense_source',
   'payment',
   'other'
 ] as const;
@@ -82,6 +83,8 @@ export interface Account {
   openingBalance?: DecStr;
   openingBalanceDate?: string;
   /** Simple mode: category used for money in / money out recorded against this account. */
+  /** Simple mode: whether the account is offered for money in, money out, or both (banks, payment accounts). Default from the type. */
+  moneyUse?: 'in' | 'out' | 'both';
   defaultIncomeCategory?: string;
   defaultExpenseCategory?: string;
   notes?: string;

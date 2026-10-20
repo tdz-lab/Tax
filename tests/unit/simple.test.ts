@@ -4,6 +4,7 @@ import { D } from '../../src/lib/decimal';
 import { computeTaxYear } from '../../src/engines/tax/taxEngine';
 import { headline, returnFigures } from '../../src/engines/tax/simpleFigures';
 import { buildTodos, missingSetup } from '../../src/ui/simple/todo';
+import { capFirst, moneyUseOf } from '../../src/ui/pages/Money';
 import { builtinCategories } from '../../src/domain/reference';
 import type { Transaction } from '../../src/domain/types';
 import type { AppDB } from '../../src/db/schema';
@@ -89,5 +90,22 @@ describe('short report', () => {
     const pages = (t: string) => t.match(/\/Type \/Page[^s]/g)?.length ?? 0;
     expect(pages(s)).toBeLessThanOrEqual(3);
     expect(pages(await text(full.blob))).toBeGreaterThan(pages(s));
+  });
+});
+
+describe('money accounts', () => {
+  it('capitalises the first letter of a typed name only', () => {
+    expect(capFirst('impact affiliate')).toBe('Impact affiliate');
+    expect(capFirst('maxBounty')).toBe('MaxBounty');
+    expect(capFirst('ébay store')).toBe('Ébay store');
+    expect(capFirst('3commas')).toBe('3commas');
+    expect(capFirst('')).toBe('');
+  });
+  it('income sources are for money in, expense accounts for money out, banks and payment accounts for both', () => {
+    expect(moneyUseOf({ type: 'income_source' })).toBe('in');
+    expect(moneyUseOf({ type: 'expense_source' })).toBe('out');
+    expect(moneyUseOf({ type: 'bank' })).toBe('both');
+    expect(moneyUseOf({ type: 'payment' })).toBe('both');
+    expect(moneyUseOf({ type: 'income_source', moneyUse: 'both' })).toBe('both');
   });
 });

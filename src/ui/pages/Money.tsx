@@ -16,10 +16,12 @@ import { useApp } from '../AppContext';
 import { useAccounts, useCategories } from '../hooks';
 import { DecimalInput, Modal, Select, TextInput } from '../components/ui';
 import { TxnTable } from '../components/TxnTable';
+import { TxnEditor } from '../components/TxnEditor';
 
 /** Account kinds offered in simple mode, in plain words. */
 export const SIMPLE_KINDS: { type: AccountType; label: string; hint: string; trading: boolean }[] = [
   { type: 'income_source', label: 'Income source', hint: 'Affiliate network, CPA network, marketplace, ad network, freelance platform…', trading: false },
+  { type: 'expense_source', label: 'Expense account', hint: 'Where money goes: hosting, software, ad spend, suppliers…', trading: false },
   { type: 'bank', label: 'Bank account', hint: 'Everyday, savings or business bank account', trading: false },
   { type: 'payment', label: 'Payment account', hint: 'PayPal, Stripe, Wise, Payoneer…', trading: false },
   { type: 'us_broker', label: 'Share broker', hint: 'Stocks and ETFs — US, Australian or international', trading: true },
@@ -29,7 +31,16 @@ export const SIMPLE_KINDS: { type: AccountType; label: string; hint: string; tra
   { type: 'prop_funded', label: 'Prop-firm account', hint: 'Evaluation or funded trading account', trading: true },
   { type: 'other', label: 'Something else', hint: 'Anything that doesn’t fit above', trading: false }
 ];
-const isTradingType = (t: AccountType) => !['bank', 'cash', 'income_source', 'payment', 'other'].includes(t);
+const isTradingType = (t: AccountType) => !['bank', 'cash', 'income_source', 'expense_source', 'payment', 'other'].includes(t);
+
+/** Whether an account is offered for money in, money out or both (banks and payment accounts are both). */
+export function moneyUseOf(a: Pick<Account, 'type' | 'moneyUse'>): 'in' | 'out' | 'both' {
+  return a.moneyUse ?? (a.type === 'income_source' ? 'in' : a.type === 'expense_source' ? 'out' : 'both');
+}
+const usableFor = (a: Account, dir: 'in' | 'out') => moneyUseOf(a) === 'both' || moneyUseOf(a) === dir;
+
+/** Capitalises the first letter of a name as it is typed (“impact affiliate” → “Impact affiliate”). */
+export const capFirst = (v: string) => v.replace(/^(\s*)(\p{Ll})/u, (_, sp: string, c: string) => sp + c.toUpperCase());
 
 const audAmount = (t: Transaction) => audOf(t, t.amount);
 
@@ -98,6 +109,7 @@ function DeleteAccountModal({ account, onBack, onDone }: { account: Account; onB
 export function AccountModal({ initial, onClose, defaultType = 'income_source' }: { initial?: Account; onClose: (saved?: Account) => void; defaultType?: AccountType }) {
   const { run, settings } = useApp();
   const [deleting, setDeleting] = useState(false);
+  const expenseCats = useCategories().filter((c) => !c.archived && c.type === 'expense');
   const isNew = !initial;
   const [a, setA] = useState<Partial<Account>>(initial ?? { id: newId('acc'), type: defaultType, currency: settings.defaultCurrency || 'AUD', taxTreatment: isTradingType(defaultType) ? 'unresolved' : 'not_applicable', propStatus: 'none', createdAt: nowIso() });
   const trading = isTradingType(a.type as AccountType);
@@ -130,11 +142,11 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
         </>
       }
     >
-      <TextInput label="Name (anything you like)" value={a.name} onChange={(v) => setA({ ...a, name: v })} placeholder="e.g. Impact affiliate, MaxBounty, CommBank, Stake US" required />
+      <TextInput label="Name (anything you like)" value={a.name} onChange={(v) => setA({ ...a, name: capFirst(v) })} placeholder="e.g. Impact affiliate, MaxBounty, CommBank, Stake US" required />
       <div style={{ margin: '10px 0 4px', fontWeight: 600 }}>What kind of account is it?</div>
       <div className="choice-cards">
         {SIMPLE_KINDS.map((k) => (
-          <button key={k.type} type="button" className="choice-card" aria-pressed={a.type === k.type} style={a.type === k.type ? { borderColor: 'var(--accent)', background: 'var(--accent-weak)' } : undefined} onClick={() => setA({ ...a, type: k.type, taxTreatment: isTradingType(k.type) ? (a.taxTreatment && a.taxTreatment !== 'not_applicable' ? a.taxTreatment : 'unresolved') : 'not_applicable' })}>
+          <button key={k.type} type="button" className="choice-card" aria-pressed={a.type === k.type} style={a.type === k.type ? { borderColor: 'var(--accent)', background: 'var(--accent-weak)' } : undefined} onClick={() => setA({ ...a, type: k.type, moneyUse: undefined, taxTreatment: isTradingType(k.type) ? (a.taxTreatment && a.taxTreatment !== 'not_applicable' ? a.taxTreatment : 'unresolved') : 'not_applicable' })}>
             <b>{k.label}</b>
             <span>{k.hint}</span>
           </button>
@@ -158,6 +170,35 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
           />
         )}
         {!trading && (
+          <div className="field span-2">
+            <label>Use it for</label>
+            <div className="row" style={{ gap: 6 }} role="group" aria-label="Use it for">
+              {(
+                [
+                  ['in', 'Money in'],
+                  ['out', 'Money out'],
+                  ['both', 'Both']
+                ] as const
+              ).map(([v, l]) => (
+                <button key={v} type="button" className={moneyUseOf(a as Account) === v ? 'primary' : ''} aria-pressed={moneyUseOf(a as Account) === v} onClick={() => setA({ ...a, moneyUse: v })}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            <span className="hint">+ Money in only offers accounts for money in (or both), and + Money out only accounts for money out (or both). Choose “Both” for banks, PayPal and other accounts you also move money between.</span>
+          </div>
+        )}
+        {!trading && moneyUseOf(a as Account) !== 'in' && (
+          <Select
+            label="Money going out is usually…"
+            className="span-2"
+            value={a.defaultExpenseCategory ?? ''}
+            onChange={(v) => setA({ ...a, defaultExpenseCategory: v || undefined })}
+            includeEmpty="Ask me each time"
+            options={expenseCats.map((c) => ({ value: c.code, label: `${c.name} (${c.group})` }))}
+          />
+        )}
+        {!trading && moneyUseOf(a as Account) !== 'out' && (
           <Select
             label="Money coming in is usually…"
             className="span-2"
@@ -181,7 +222,7 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
 /** Quick money in / money out entry. */
 export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 'in' | 'out'; accountId?: string; onClose: () => void }) {
   const { run, fy, settings } = useApp();
-  const accounts = useAccounts().filter((a) => !a.archived);
+  const accounts = useAccounts().filter((a) => !a.archived && (usableFor(a, direction) || a.id === accountId));
   const categories = useCategories().filter((c) => !c.archived && c.type === (direction === 'in' ? 'income' : 'expense'));
   const today = new Date().toISOString().slice(0, 10);
   const inYear = today >= fyStart(fy) && today <= fyEnd(fy) ? today : fyEnd(fy);
@@ -217,7 +258,7 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
     );
     if (t) onClose();
   };
-  if (newAcct) return <AccountModal onClose={(a) => { setNewAcct(false); if (a) setF({ ...f, accountId: a.id, currency: a.currency }); }} />;
+  if (newAcct) return <AccountModal defaultType={direction === 'in' ? 'income_source' : 'expense_source'} onClose={(a) => { setNewAcct(false); if (a) setF({ ...f, accountId: a.id, currency: a.currency }); }} />;
   return (
     <Modal
       title={direction === 'in' ? 'Money in' : 'Money out'}
@@ -232,7 +273,7 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
       }
     >
       <div className="form-grid">
-        <Select label="Account" className="span-2" value={f.accountId} includeEmpty="(no account)" onChange={pickAccount} options={[...accounts.map((a) => ({ value: a.id, label: `${a.name} — ${ACCOUNT_TYPE_LABEL[a.type]}` })), { value: '__new', label: '+ Add a new account…' }]} />
+        <Select label="Account" className="span-2" value={f.accountId} includeEmpty="(no account)" onChange={pickAccount} options={[...accounts.map((a) => ({ value: a.id, label: `${a.name} — ${ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]}` })), { value: '__new', label: '+ Add a new account…' }]} />
         <TextInput label="Date" type="date" value={f.date} onChange={(v) => setF({ ...f, date: v })} required />
         <DecimalInput label="Amount" value={f.amount} onChange={(v) => setF({ ...f, amount: v })} required />
         <TextInput label="Currency" value={f.currency} onChange={(v) => setF({ ...f, currency: v.toUpperCase() })} />
@@ -260,6 +301,11 @@ export function plRows(txns: Transaction[], catName: Map<string, string>) {
   const outRows = group(txns.filter((t) => t.kind === 'expense' || t.kind === 'fee'));
   return { inRows, outRows, inTotal: total(inRows), outTotal: total(outRows) };
 }
+const SECTIONS: { use: 'in' | 'out' | 'both'; title: string; addType: AccountType; empty: string }[] = [
+  { use: 'in', title: 'Money in', addType: 'income_source', empty: 'Where money comes from — e.g. affiliate or CPA networks, marketplaces, clients.' },
+  { use: 'out', title: 'Money out', addType: 'expense_source', empty: 'Where money goes — e.g. hosting, software, ad spend, suppliers.' },
+  { use: 'both', title: 'Banks & payment accounts', addType: 'bank', empty: 'Bank accounts, PayPal, Stripe, Wise… — used for money in, money out and moving money between your accounts.' }
+];
 const fm = (v: Decimal | null) => (v === null ? 'needs exchange rate' : formatMoney(v));
 
 export function Money() {
@@ -267,7 +313,8 @@ export function Money() {
   const accounts = useAccounts();
   const categories = useCategories();
   const [quick, setQuick] = useState<{ dir: 'in' | 'out'; accountId?: string } | null>(null);
-  const [editAcct, setEditAcct] = useState<Account | 'new' | null>(null);
+  const [editAcct, setEditAcct] = useState<Account | { type: AccountType } | null>(null);
+  const [move, setMove] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('');
   const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'income' || t.kind === 'expense' || t.kind === 'fee')).toArray(), [fy], []);
   const catName = useMemo(() => new Map(categories.map((c) => [c.code, c.name])), [categories]);
@@ -288,8 +335,9 @@ export function Money() {
     }
     return m;
   }, [txns]);
-  const moneyAccounts = accounts.filter((a) => !a.archived && (!isTradingType(a.type) || perAccount.has(a.id)));
-  const hiddenAccounts = accounts.filter((a) => a.archived);
+  // Brokers, exchanges and wallets live under Trading; their dividends etc. still appear in the profit & loss.
+  const moneyAccounts = accounts.filter((a) => !a.archived && !isTradingType(a.type));
+  const hiddenAccounts = accounts.filter((a) => a.archived && !isTradingType(a.type));
   return (
     <div className="simple-page">
       <div className="page-head">
@@ -302,7 +350,10 @@ export function Money() {
         <div className="actions">
           <button className="primary" onClick={() => setQuick({ dir: 'in', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Money in</button>
           <button className="primary" onClick={() => setQuick({ dir: 'out', accountId: filter && filter !== '__none' ? filter : undefined })}>+ Money out</button>
-          <button onClick={() => setEditAcct('new')}>+ Add account</button>
+          <button onClick={() => setMove('')} title="Move money between your own accounts — not income or an expense">
+            Move money
+          </button>
+          <button onClick={() => setEditAcct({ type: 'income_source' })}>+ Add account</button>
         </div>
       </div>
       <div className="grid cols-2">
@@ -357,63 +408,108 @@ export function Money() {
           </div>
           <div className="panel">
             <h2>Your accounts</h2>
-            {moneyAccounts.length === 0 && <p className="muted">Add the places money comes from or goes to — e.g. your affiliate or CPA networks, PayPal and bank accounts. Give them any name you like.</p>}
-            <table className="pl-table">
-              <tbody>
-                {moneyAccounts.map((a) => {
-                  const e = perAccount.get(a.id);
-                  return (
-                    <tr key={a.id}>
-                      <td>
-                        <button className="link" onClick={() => setFilter(a.id)}>
-                          {a.name}
-                        </button>
-                        <div className="faint" style={{ fontSize: 11 }}>
-                          {ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]} · {e?.n ?? 0} records
-                        </div>
-                      </td>
-                      <td className="num">
-                        <span className="pos">{e ? fm(e.inn) : '$0.00'}</span>
-                        <div className="faint" style={{ fontSize: 11 }}>out {e ? fm(e.out) : '$0.00'}</div>
-                      </td>
-                      <td style={{ width: 120, textAlign: 'right' }}>
-                        <button className="small" onClick={() => setQuick({ dir: 'in', accountId: a.id })}>+ In</button> <button className="small" onClick={() => setQuick({ dir: 'out', accountId: a.id })}>+ Out</button>{' '}
-                        <button className="small link" onClick={() => setEditAcct(a)} aria-label={`Edit ${a.name}`}>Edit</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {perAccount.has('__none') && (
-                  <tr>
-                    <td>
-                      <button className="link" onClick={() => setFilter('__none')}>No account</button>
-                    </td>
-                    <td className="num">{fm(perAccount.get('__none')!.inn)}</td>
-                    <td />
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            {moneyAccounts.length === 0 && <p className="muted">Add the places money comes from or goes to — e.g. your affiliate or CPA networks, hosting or ad spend, PayPal and bank accounts. Give them any name you like.</p>}
+            {SECTIONS.map((sec) => {
+              const list = moneyAccounts.filter((a) => moneyUseOf(a) === sec.use);
+              const showNone = sec.use === 'both' && perAccount.has('__none');
+              return (
+                <section key={sec.use} className="acct-section" aria-label={sec.title}>
+                  <div className="acct-section-head">
+                    <b>{sec.title}</b>
+                    <span className="faint">{list.length}</span>
+                    <button className="small link" style={{ marginLeft: 'auto' }} onClick={() => setEditAcct({ type: sec.addType })}>
+                      + Add
+                    </button>
+                  </div>
+                  {list.length === 0 && !showNone ? (
+                    <p className="faint" style={{ margin: '4px 0 8px', fontSize: 12 }}>{sec.empty}</p>
+                  ) : (
+                    <div className="acct-scroll">
+                      <table className="pl-table">
+                        <tbody>
+                          {list.map((a) => {
+                            const e = perAccount.get(a.id);
+                            return (
+                              <tr key={a.id}>
+                                <td>
+                                  <button className="link" onClick={() => setFilter(a.id)}>
+                                    {a.name}
+                                  </button>
+                                  <div className="faint" style={{ fontSize: 11 }}>
+                                    {ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]} · {e?.n ?? 0} records
+                                  </div>
+                                </td>
+                                <td className="num">
+                                  {sec.use !== 'out' && <span className="pos">{e ? fm(e.inn) : '$0.00'}</span>}
+                                  {sec.use === 'both' && <div className="faint" style={{ fontSize: 11 }}>out {e ? fm(e.out) : '$0.00'}</div>}
+                                  {sec.use === 'out' && <span>{e ? fm(e.out) : '$0.00'}</span>}
+                                </td>
+                                <td className={`acct-actions ${sec.use}`}>
+                                  {sec.use !== 'out' && (
+                                    <button className="small" onClick={() => setQuick({ dir: 'in', accountId: a.id })}>
+                                      + In
+                                    </button>
+                                  )}{' '}
+                                  {sec.use !== 'in' && (
+                                    <button className="small" onClick={() => setQuick({ dir: 'out', accountId: a.id })}>
+                                      + Out
+                                    </button>
+                                  )}{' '}
+                                  {sec.use === 'both' && (
+                                    <button className="small" onClick={() => setMove(a.id)} title="Move money to another of your accounts">
+                                      Move
+                                    </button>
+                                  )}{' '}
+                                  <button className="small link" onClick={() => setEditAcct(a)} aria-label={`Edit ${a.name}`}>
+                                    Edit
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {showNone && (
+                            <tr>
+                              <td>
+                                <button className="link" onClick={() => setFilter('__none')}>
+                                  No account
+                                </button>
+                              </td>
+                              <td className="num">
+                                {fm(perAccount.get('__none')!.inn)}
+                                <div className="faint" style={{ fontSize: 11 }}>out {fm(perAccount.get('__none')!.out)}</div>
+                              </td>
+                              <td />
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              );
+            })}
             {hiddenAccounts.length > 0 && (
               <details style={{ marginTop: 8 }}>
                 <summary className="muted">Hidden accounts ({hiddenAccounts.length})</summary>
-                <table className="pl-table">
-                  <tbody>
-                    {hiddenAccounts.map((a) => (
-                      <tr key={a.id}>
-                        <td>
-                          {a.name}
-                          <div className="faint" style={{ fontSize: 11 }}>{ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]}</div>
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button className="small" onClick={() => run(() => saveEntity('accounts', { ...a, archived: false, updatedAt: nowIso() }), { success: `“${a.name}” is shown again.` })}>
-                            Show again
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <div className="acct-scroll">
+                  <table className="pl-table">
+                    <tbody>
+                      {hiddenAccounts.map((a) => (
+                        <tr key={a.id}>
+                          <td>
+                            {a.name}
+                            <div className="faint" style={{ fontSize: 11 }}>{ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]}</div>
+                          </td>
+                          <td style={{ textAlign: 'right' }}>
+                            <button className="small" onClick={() => run(() => saveEntity('accounts', { ...a, archived: false, updatedAt: nowIso() }), { success: `“${a.name}” is shown again.` })}>
+                              Show again
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </details>
             )}
           </div>
@@ -423,7 +519,8 @@ export function Money() {
         <TxnTable id="money-records" rows={shown} newDefaults={{ kind: 'income' }} emptyText="No money in or out recorded for this year yet — use + Money in / + Money out above." />
       </div>
       {quick && <QuickMoneyModal direction={quick.dir} accountId={quick.accountId} onClose={() => setQuick(null)} />}
-      {editAcct && <AccountModal initial={editAcct === 'new' ? undefined : editAcct} onClose={() => setEditAcct(null)} />}
+      {editAcct && <AccountModal initial={'id' in editAcct ? editAcct : undefined} defaultType={'id' in editAcct ? undefined : editAcct.type} onClose={() => setEditAcct(null)} />}
+      {move !== null && <TxnEditor initial={{ kind: 'transfer', side: 'send', accountId: move || undefined, currency: accounts.find((a) => a.id === move)?.currency }} onClose={() => setMove(null)} />}
     </div>
   );
 }

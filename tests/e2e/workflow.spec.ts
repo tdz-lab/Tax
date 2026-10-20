@@ -421,3 +421,57 @@ test('delete money accounts: empty account deleted, account with records hidden 
   await expect(page.getByRole('cell', { name: 'Busy payout' })).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+
+test('money in and money out accounts are kept apart; banks are offered for both and for moving money', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('./');
+  await selectFY(page, '2025');
+  await page.goto('./#/money');
+  const addIn = page.getByRole('region', { name: 'Money in' });
+  const addOut = page.getByRole('region', { name: 'Money out' });
+  const banks = page.getByRole('region', { name: 'Banks & payment accounts' });
+  const create = async (section: typeof addIn, typed: string) => {
+    await section.getByRole('button', { name: '+ Add' }).click();
+    const d = page.getByRole('dialog');
+    await d.getByLabel('Name (anything you like)').pressSequentially(typed);
+    await d.getByRole('button', { name: 'Add account' }).click();
+    await expect(d).toHaveCount(0);
+  };
+  await create(addIn, 'impact affiliate');
+  await create(addOut, 'hosting co');
+  await create(banks, 'commbank');
+  // First letter capitalised automatically.
+  await expect(addIn.getByRole('button', { name: 'Impact affiliate', exact: true })).toBeVisible();
+  await expect(addOut.getByRole('button', { name: 'Hosting co', exact: true })).toBeVisible();
+  await expect(banks.getByRole('button', { name: 'Commbank', exact: true })).toBeVisible();
+
+  const optionsFor = async (button: string) => {
+    await page.getByRole('button', { name: button }).first().click();
+    const d = page.getByRole('dialog');
+    const texts = await d.getByLabel('Account').locator('option').allTextContents();
+    await d.getByRole('button', { name: 'Cancel' }).click();
+    return texts.join(' | ');
+  };
+  const inOpts = await optionsFor('+ Money in');
+  expect(inOpts).toContain('Impact affiliate');
+  expect(inOpts).toContain('Commbank');
+  expect(inOpts).not.toContain('Hosting co');
+  const outOpts = await optionsFor('+ Money out');
+  expect(outOpts).toContain('Hosting co');
+  expect(outOpts).toContain('Commbank');
+  expect(outOpts).not.toContain('Impact affiliate');
+
+  // Banks can move money to another of your accounts (a transfer, not income or an expense).
+  await banks.getByRole('button', { name: 'Move' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Record type')).toHaveValue('transfer');
+  await page.getByRole('dialog').getByRole('button', { name: 'Close' }).last().click();
+
+  // After about five accounts the list scrolls instead of pushing the page down.
+  for (const n of ['b network', 'c network', 'd network', 'e network', 'f network', 'g network']) await create(addIn, n);
+  const box = addIn.locator('.acct-scroll');
+  const { scroll, client } = await box.evaluate((el) => ({ scroll: el.scrollHeight, client: el.clientHeight }));
+  expect(client).toBeLessThanOrEqual(265);
+  expect(scroll).toBeGreaterThan(client);
+  expect(errors).toEqual([]);
+});

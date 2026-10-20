@@ -46,6 +46,7 @@ export const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
   bank: 'Bank account',
   cash: 'Cash / other',
   income_source: 'Income source (affiliate, CPA network, marketplace…)',
+  expense_source: 'Expense account (hosting, software, ad spend, suppliers…)',
   payment: 'Payment account (PayPal, Stripe, Wise…)',
   other: 'Other'
 };

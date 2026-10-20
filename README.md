@@ -85,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.5.1.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.6.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -120,7 +120,10 @@ calculations are identical.
 * **Simple** (default): *Home* (money in, money out, trading gains, estimated refund or tax, a running-totals chart
   and a short **To do** list with a button to fix each item), *Tax summary* (the figures grouped the way the tax
   return asks for them, your quick-question answers, and the short PDF), *Money in & out* (a profit-and-loss view and
-  your own accounts — type any name: affiliate or CPA networks, PayPal, Stripe, banks; each with **+ In / + Out**;
+  your own accounts — type any name, the first letter is capitalised for you. Accounts are grouped as **Money in**
+  (affiliate or CPA networks, clients…), **Money out** (hosting, software, ad spend…) and **Banks & payment
+  accounts** (used for both, and for **Move money** between your own accounts); + Money in and + Money out only
+  offer the matching accounts, and each group scrolls once it has more than about five;
   **Edit → Delete…** removes an account with no records, or hides it, or deletes it together with its records,
   which go to *Deleted* and can be restored),
   *Add trades* (pick or add a broker, exchange or wallet, then type a trade or import its file), *My trades*,
