@@ -11,7 +11,7 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
 | `npm run lint` | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
 | `npm test` | 103 unit/integration tests in 9 files | **103 passed, 0 failed** |
 | `npm run build` | Production build + service worker (Workbox precache of 41 entries) | **Passed** |
-| `npm run test:e2e` | 3 Playwright tests against the production build | **3 passed, 0 failed** |
+| `npm run test:e2e` | 5 Playwright tests against the production build (incl. every tutorial step) | **5 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -92,8 +92,19 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
 3. **Navigation** — with demonstration data, every main navigation item and every tab renders without page or
    console errors; a dashboard total opens its source records.
 
+### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)
+4. **Every tutorial step** — with practice data loaded, all 30 tutorials (316 steps) are run from the Tutorials
+   page; at every step the highlighted element must be found on screen. “Your turn” steps are skipped (so the test
+   also proves later steps recover when a user skips); the only exceptions are 11 steps that by design need the
+   user’s action first (e.g. the mapping screen after choosing a CSV file, the conversion panel of a just-saved
+   record). Completion progress is recorded for all 30.
+5. **Interactive step** — “Your turn” keeps *Next* disabled until the user performs the action (opening the
+   record editor, choosing a record type), shows “✓ Done!”, then unlocks; the practice-data prompt appears when
+   there are no records; *Exit tutorial* closes it.
+
 ## Additional manual checks performed
 
+* Visual inspection of tutorial cards and spotlight placement (inside dialogs and on pages).
 * Visual inspection of every page and tab (desktop 1440 px) and the dashboard at phone width (390 px, no horizontal
   scrolling).
 * Rendered PDF pages of both reports inspected as images (layout, repeated headers, page numbers, disclaimers).

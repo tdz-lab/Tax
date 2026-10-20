@@ -227,22 +227,45 @@ function FinishCard({ running, onClose }: { running: Running; onClose: () => voi
 }
 
 function renderBody(body: string): ReactNode {
-  const inline = (s: string) => s.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : <span key={i}>{p}</span>));
-  return body
+  const inline = (str: string) => str.split(/(\*\*[^*]+\*\*)/g).map((p, i) => (p.startsWith('**') ? <b key={i}>{p.slice(2, -2)}</b> : <span key={i}>{p}</span>));
+  const out: ReactNode[] = [];
+  body
     .trim()
     .split(/\n\s*\n/)
-    .map((para, i) => {
-      const lines = para.split('\n').map((l) => l.trim());
-      if (lines.every((l) => l.startsWith('- ')))
-        return (
-          <ul key={i}>
-            {lines.map((l, j) => (
-              <li key={j}>{inline(l.slice(2))}</li>
-            ))}
-          </ul>
-        );
-      return <p key={i}>{inline(lines.join(' '))}</p>;
+    .forEach((para, pi) => {
+      // Group consecutive "- " lines into a list; other lines form paragraphs.
+      let text: string[] = [];
+      let items: string[] = [];
+      const flush = (k: string) => {
+        if (text.length) out.push(<p key={`p${k}`}>{inline(text.join(' '))}</p>);
+        if (items.length)
+          out.push(
+            <ul key={`u${k}`}>
+              {items.map((l, j) => (
+                <li key={j}>{inline(l)}</li>
+              ))}
+            </ul>
+          );
+        text = [];
+        items = [];
+      };
+      para.split('\n').forEach((raw, li) => {
+        const l = raw.trim();
+        if (l.startsWith('- ')) {
+          if (text.length) flush(`${pi}-${li}`);
+          items.push(l.slice(2));
+        } else if (/^\d+\. /.test(l)) {
+          if (items.length || text.length) flush(`${pi}-${li}`);
+          text.push(l);
+          flush(`${pi}-${li}n`);
+        } else {
+          if (items.length) flush(`${pi}-${li}`);
+          text.push(l);
+        }
+      });
+      flush(`${pi}-end`);
     });
+  return out;
 }
 
 function TourOverlay({ running, onStep, onExit, onTourDone }: { running: Running; onStep: (n: number) => void; onExit: () => void; onTourDone: () => void }) {
