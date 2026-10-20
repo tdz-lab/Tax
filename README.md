@@ -83,7 +83,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.3.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.3.1.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -261,6 +261,8 @@ version and are migrated on restore.
 
 | Problem | What to do |
 | --- | --- |
+| Double-clicking the start file does nothing (Linux) | Linux Mint/Ubuntu file managers run scripts invisibly by default. In the file manager choose *Edit → Preferences → Behaviour → Executable text files → Ask each time*, then double-click and pick **Run in Terminal** — or run `./start-linux.sh` in a terminal. |
+| “Node.js is not installed” when double-clicking, although `node` works in a terminal | Node was installed for your terminal only (e.g. with nvm). Since 1.3.1 the start scripts also look in the usual nvm/volta/fnm/asdf/Homebrew folders. Otherwise run once in a terminal: `sudo ln -sf "$(which node)" /usr/local/bin/node`. |
 | “Local database unavailable” | Private/incognito windows and some privacy settings block IndexedDB. Use a normal window and allow site data for `localhost`. |
 | Port 4173 already in use | Close the other window, or run `node scripts/serve.mjs 4174` (note: a different port = a different browser database; restore a backup there). |
 | My data disappeared | You may be using a different browser, profile or port, or site data was cleared. Restore your latest backup. |

@@ -1,7 +1,18 @@
 #!/bin/bash
-# Double-click in Finder to start the application.
+# Start the application: run ./start-linux.sh in a terminal, or double-click and choose "Run in Terminal".
 cd "$(dirname "$0")"
-if ! command -v node >/dev/null 2>&1; then
+# Programs started from a file manager don't load ~/.bashrc / ~/.zshrc, so Node installed with
+# nvm, fnm, volta, asdf or Homebrew may be missing from PATH. Look in the usual places.
+find_node() {
+  command -v node >/dev/null 2>&1 && return 0
+  export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
+  if [ -s "$NVM_DIR/nvm.sh" ]; then . "$NVM_DIR/nvm.sh" >/dev/null 2>&1; command -v node >/dev/null 2>&1 && return 0; fi
+  for d in "$NVM_DIR"/versions/node/*/bin "$HOME/.volta/bin" "$HOME/.asdf/shims" "$HOME/.local/share/fnm/aliases/default/bin" "$HOME/.fnm/aliases/default/bin" "$HOME/.local/bin" /usr/local/bin /opt/homebrew/bin; do
+    if [ -x "$d/node" ]; then PATH="$d:$PATH"; export PATH; return 0; fi
+  done
+  return 1
+}
+if ! find_node; then
   echo "Node.js is not installed. Download the LTS version from https://nodejs.org and run this again."
   read -r -p "Press Enter to close"
   exit 1
