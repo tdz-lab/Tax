@@ -114,7 +114,7 @@ export function Reports() {
             <label className="row">
               <input type="checkbox" checked={opts.accountIds === null} onChange={() => setOpts({ ...opts, accountIds: opts.accountIds === null ? [] : null })} /> All accounts
             </label>
-            {accounts.map((a) => (
+            {accounts.filter((a) => !a.deletedAt).map((a) => (
               <label key={a.id} className="row">
                 <input type="checkbox" checked={opts.accountIds === null || opts.accountIds.includes(a.id)} onChange={() => setOpts({ ...opts, accountIds: toggle(opts.accountIds, accounts.map((x) => x.id), a.id) })} /> {a.name}
               </label>

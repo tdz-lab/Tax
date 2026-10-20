@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.6.0.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.6.1.
 
 ## Commands and results
 
@@ -9,9 +9,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
 | --- | --- | --- |
 | `npm run typecheck` (`tsc -b --noEmit`) | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` (`eslint .`) | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` (`vitest run`) | 210 unit/integration tests in 13 files | **210 passed, 0 failed** |
+| `npm test` (`vitest run`) | 211 unit/integration tests in 13 files | **211 passed, 0 failed** |
 | `npm run build` (`tsc -b && vite build`) | Production build + service worker (Workbox precache of 41 entries, 1,812 KiB) | **Passed** |
-| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 11 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs, fetching rates, deleting and separating accounts) | **11 passed, 0 failed** |
+| `npm run test:e2e` (`playwright test`, against `npm run preview`) | 12 Playwright tests against the production build (incl. every tutorial step, the simple layout, typing in dialogs, fetching rates, deleting and separating accounts) | **12 passed, 0 failed** |
 
 ## What the automated tests cover
 
@@ -25,8 +25,9 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (A
   stablecoins never assumed = US$1, prior-day look-back recorded, missing rates flagged (never zero/today’s rate),
   execution-rate preference, manual overrides requiring source + reason, reciprocal precision, rate validation.
 * Deleting accounts never orphans records: no records → deleted; “hide” keeps records counting; “delete with
-  records” soft-deletes them and keeps the account hidden so restored records keep it; the generic delete refuses
-  an account that still has records.
+  records” soft-deletes them and marks the account deleted (restoring a record brings it back; purging deleted
+  records removes it); a hidden account can be deleted; the generic delete refuses an account that still has
+  records.
 * Persistence: create/update idempotent by id, audit diffs, closing and reopening the database, validation errors,
   soft delete/undo, FX resolved on save and refreshed when rates arrive, manual override history and removal,
   overseas time-zone handling, re-classification on account-treatment change, bulk updates, settings.
@@ -162,7 +163,10 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
    still shows and counts), shown again, then deleted together with its record (removed from the year).
 3f. **Money in / money out accounts** — names typed in lower case are capitalised; + Money in offers income and
    bank accounts but not expense accounts, + Money out the reverse; a bank’s **Move** opens a transfer; with
-   seven accounts the Money in list scrolls (at most 265 px high) instead of growing.
+   seven accounts the Money in list scrolls (at most 265 px high) instead of growing. A prop-firm account is not
+   offered under + Money in, is listed under Trading accounts and can be deleted there.
+3g. **Deleting hidden accounts** — a hidden account with a record is deleted together with its record from the
+   hidden list (no “hide” option offered) and then appears nowhere, including the Money in account list.
 3d. **Year selector** — defaults to *Current year*; a picked year stays after reload; *Current year* can be chosen again.
 
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)

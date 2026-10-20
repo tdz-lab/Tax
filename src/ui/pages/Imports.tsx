@@ -197,7 +197,7 @@ function Wizard() {
           <div className="form-grid">
             <Select label="Record type" value={tpl.target} onChange={changeTarget} options={TARGETS.map((t) => ({ value: t, label: TARGET_LABEL[t] }))} className="span-2" />
             {tpl.target !== 'rates' && (
-              <Select label={`Default account${needsAccount ? ' (required)' : ''}`} value={accountId} includeEmpty="Choose…" onChange={setAccountId} options={accounts.map((a) => ({ value: a.id, label: a.name }))} className="span-2" />
+              <Select label={`Default account${needsAccount ? ' (required)' : ''}`} value={accountId} includeEmpty="Choose…" onChange={setAccountId} options={accounts.filter((a) => !a.archived).map((a) => ({ value: a.id, label: a.name }))} className="span-2" />
             )}
             <TextInput label="Date format" value={tpl.dateFormat} onChange={(v) => setTpl({ ...tpl, dateFormat: v || 'auto' })} hint="auto, dd/MM/yyyy, MM/dd/yyyy, yyyy-MM-dd…" />
             <TextInput label="Time zone of times in file" value={tpl.timeZone} onChange={(v) => setTpl({ ...tpl, timeZone: v })} hint={isValidZone(tpl.timeZone) ? 'IANA zone, e.g. America/New_York, UTC' : 'Unknown zone'} />

@@ -467,6 +467,20 @@ test('money in and money out accounts are kept apart; banks are offered for both
   await expect(page.getByRole('dialog').getByLabel('Record type')).toHaveValue('transfer');
   await page.getByRole('dialog').getByRole('button', { name: 'Close' }).last().click();
 
+  // Trading accounts (e.g. a prop-firm account) are not offered for money in/out, but are listed — and deletable.
+  await page.getByRole('button', { name: '+ Add account' }).click();
+  const d = page.getByRole('dialog');
+  await d.getByLabel('Name (anything you like)').fill('65465');
+  await d.getByRole('button', { name: /Prop-firm account/ }).click();
+  await d.getByRole('button', { name: 'Add account' }).click();
+  const trading = page.getByRole('region', { name: 'Trading accounts' });
+  await expect(trading.getByText('65465')).toBeVisible();
+  expect(await optionsFor('+ Money in')).not.toContain('65465');
+  await trading.getByRole('button', { name: 'Edit 65465' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete account' }).click();
+  await expect(page.getByRole('region', { name: 'Trading accounts' })).toHaveCount(0);
+
   // After about five accounts the list scrolls instead of pushing the page down.
   for (const n of ['b network', 'c network', 'd network', 'e network', 'f network', 'g network']) await create(addIn, n);
   const box = addIn.locator('.acct-scroll');
@@ -474,4 +488,31 @@ test('money in and money out accounts are kept apart; banks are offered for both
   expect(client).toBeLessThanOrEqual(265);
   expect(scroll).toBeGreaterThan(client);
   expect(errors).toEqual([]);
+});
+
+test('hidden accounts with records can be deleted and then disappear everywhere', async ({ page }) => {
+  await page.goto('./');
+  await selectFY(page, '2025');
+  await page.goto('./#/money');
+  await page.getByRole('button', { name: '+ Add account' }).click();
+  let d = page.getByRole('dialog');
+  await d.getByLabel('Name (anything you like)').fill('Old network');
+  await d.getByRole('button', { name: 'Add account' }).click();
+  await page.getByRole('row', { name: /Old network/ }).getByRole('button', { name: '+ In' }).click();
+  d = page.getByRole('dialog');
+  await d.getByLabel('Date').fill('2024-10-01');
+  await d.getByLabel('Amount').fill('50');
+  if (!(await d.getByLabel('What is it?').inputValue())) await d.getByLabel('What is it?').selectOption({ index: 1 });
+  await d.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit Old network' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Delete…' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: /Hide the account/ }).click();
+  await page.getByText('Hidden accounts (1)').click();
+  await page.getByRole('button', { name: 'Delete Old network' }).click();
+  d = page.getByRole('dialog');
+  await expect(d.getByRole('button', { name: /Hide the account/ })).toHaveCount(0); // already hidden
+  await d.getByRole('button', { name: /Delete the account and its 1 record/ }).click();
+  await expect(page.getByText(/Hidden accounts/)).toHaveCount(0);
+  await page.getByRole('button', { name: '+ Money in' }).first().click();
+  expect((await page.getByRole('dialog').getByLabel('Account').locator('option').allTextContents()).join('|')).not.toContain('Old network');
 });

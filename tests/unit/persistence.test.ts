@@ -4,6 +4,7 @@ import { AppDB, SCHEMA_V1, setDb } from '../../src/db/schema';
 import { saveTransaction, softDeleteTransactions, restoreTransactions, overrideRate, clearRateOverride, refreshAllConversions, ValidationError, saveEntity, bulkUpdateTransactions, reclassifyAll, deleteEntity, removeAccount, accountRecordCounts } from '../../src/services/ledger';
 import { saveSettings, loadSettings } from '../../src/services/settings';
 import { dropDb, freshDb } from './dbHelpers';
+import { purgeDeleted } from '../../src/services/integrity';
 import { D } from '../../src/lib/decimal';
 import type { Account } from '../../src/domain/types';
 
@@ -151,11 +152,26 @@ describe('deleting accounts never orphans records', () => {
     expect(await removeAccount('a2', 'hide')).toBe('hidden');
     expect((await db.accounts.get('a2'))!.archived).toBe(true);
     expect((await db.transactions.get(t1.id))!.status).toBe('active');
-    expect(await removeAccount('a2', 'delete_records')).toBe('hidden');
+    expect(await removeAccount('a2', 'delete_records')).toBe('deleted');
     expect(await accountRecordCounts('a2')).toEqual({ active: 0, deleted: 2 });
-    expect(await db.accounts.get('a2')).toBeDefined(); // kept (hidden) so restored records still have their account
+    const gone = (await db.accounts.get('a2'))!; // kept only so restored records still have their account
+    expect(gone.deletedAt).toBeTruthy();
+    expect(gone.archived).toBe(true);
+    // Restoring a record brings the account back.
     await restoreTransactions([t1.id, t2.id]);
     expect((await db.transactions.get(t2.id))!.accountId).toBe('a2');
+    const back = (await db.accounts.get('a2'))!;
+    expect(back.deletedAt).toBeUndefined();
+    expect(back.archived).toBe(false);
+  });
+  it('a hidden account can be deleted, and purging deleted records removes it for good', async () => {
+    await saveEntity('accounts', src('a4'));
+    await saveTransaction({ kind: 'income', date: '2024-08-01', description: 'Payout', category: 'business', amount: '100', currency: 'AUD', accountId: 'a4' });
+    await removeAccount('a4', 'hide');
+    expect(await removeAccount('a4', 'delete_records')).toBe('deleted');
+    expect((await db.accounts.get('a4'))!.deletedAt).toBeTruthy();
+    await purgeDeleted();
+    expect(await db.accounts.get('a4')).toBeUndefined();
   });
   it('the generic delete refuses an account that still has records', async () => {
     await saveEntity('accounts', src('a3'));

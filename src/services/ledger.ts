@@ -296,11 +296,14 @@ export async function softDeleteTransactions(ids: string[], reason = 'Deleted by
 
 export async function restoreTransactions(ids: string[]): Promise<void> {
   const db = getDb();
-  await db.transaction('rw', [db.transactions, db.audit, db.meta], async () => {
+  await db.transaction('rw', [db.transactions, db.accounts, db.audit, db.meta], async () => {
     for (const id of ids) {
       const t = await db.transactions.get(id);
       if (!t || t.status !== 'deleted') continue;
       await db.transactions.put({ ...t, status: 'active', updatedAt: nowIso(), version: t.version + 1 });
+      // A restored record brings back its deleted account.
+      const acc = t.accountId ? await db.accounts.get(t.accountId) : undefined;
+      if (acc?.deletedAt) await db.accounts.put({ ...acc, deletedAt: undefined, archived: false, updatedAt: nowIso() });
       await writeAudit({ entityType: 'transaction', entityId: id, action: 'restore', summary: `Restored ${t.kind}: ${t.description}` });
     }
     await bumpRevision();
@@ -458,8 +461,9 @@ export async function accountRecordCounts(id: string): Promise<{ active: number;
 /**
  * Removes an account without orphaning records. An account with no records at all is deleted. Otherwise:
  * 'hide' archives it (its records stay and still count); 'delete_records' moves its records to Deleted (they
- * stop counting and can be restored from All transactions → Show deleted) and hides the account, so restored
- * records still have their account.
+ * stop counting and can be restored from All transactions → Show deleted) and marks the account deleted — it no
+ * longer appears anywhere, comes back if one of its records is restored, and is removed for good when deleted
+ * records are purged.
  */
 export async function removeAccount(id: string, mode: 'hide' | 'delete_records'): Promise<'deleted' | 'hidden'> {
   const db = getDb();
@@ -474,8 +478,9 @@ export async function removeAccount(id: string, mode: 'hide' | 'delete_records')
     const ids = (await db.transactions.where('accountId').equals(id).toArray()).filter((t) => t.status !== 'deleted').map((t) => t.id);
     await softDeleteTransactions(ids, `Account “${acc.name}” deleted with its records`);
   }
-  await saveEntity('accounts', { ...acc, archived: true, updatedAt: nowIso() }, { reason: mode === 'hide' ? 'Account hidden' : 'Account deleted with its records' });
-  return 'hidden';
+  const now = nowIso();
+  await saveEntity('accounts', { ...acc, archived: true, deletedAt: mode === 'delete_records' ? now : acc.deletedAt, updatedAt: now }, { reason: mode === 'hide' ? 'Account hidden' : 'Account deleted with its records' });
+  return mode === 'hide' ? 'hidden' : 'deleted';
 }
 
 /** Re-run classification on records whose class was not set explicitly (after changing account treatment / rules). */

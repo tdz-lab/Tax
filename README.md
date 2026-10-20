@@ -85,7 +85,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.6.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.6.1.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -123,9 +123,11 @@ calculations are identical.
   your own accounts — type any name, the first letter is capitalised for you. Accounts are grouped as **Money in**
   (affiliate or CPA networks, clients…), **Money out** (hosting, software, ad spend…) and **Banks & payment
   accounts** (used for both, and for **Move money** between your own accounts); + Money in and + Money out only
-  offer the matching accounts, and each group scrolls once it has more than about five;
+  offer the matching accounts (never trading accounts), and each group scrolls once it has more than about five.
+  Brokers, exchanges, wallets and prop-firm accounts are listed under **Trading accounts** (Edit / Delete there);
   **Edit → Delete…** removes an account with no records, or hides it, or deletes it together with its records,
-  which go to *Deleted* and can be restored),
+  which go to *Deleted* and can be restored — restoring one brings the account back; purging deleted records in
+  *Settings → Data health* removes it for good. Hidden accounts can be shown again or deleted),
   *Add trades* (pick or add a broker, exchange or wallet, then type a trade or import its file), *My trades*,
   *Holdings*, *Performance*, *All transactions*, *Import files*, *Tutorials* and *Settings*.
   Technical warnings that do not stop you finishing are kept as **Notes for your accountant** on the Tax summary.

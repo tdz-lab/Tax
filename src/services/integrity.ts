@@ -41,9 +41,13 @@ export async function runIntegrityChecks(): Promise<IntegrityReport> {
 /** Permanently remove soft-deleted transactions (after confirmation). */
 export async function purgeDeleted(): Promise<number> {
   const db = getDb();
-  return db.transaction('rw', [db.transactions, db.audit], async () => {
+  return db.transaction('rw', [db.transactions, db.accounts, db.audit], async () => {
     const ids = await db.transactions.where('status').equals('deleted').primaryKeys();
     await db.transactions.bulkDelete(ids);
+    // Accounts deleted together with their records go once none of their records remain.
+    for (const a of await db.accounts.filter((x) => !!x.deletedAt).toArray()) {
+      if ((await db.transactions.where('accountId').equals(a.id).count()) === 0) await db.accounts.delete(a.id);
+    }
     await db.audit.add({ id: `aud_purge_${Date.now()}`, at: new Date().toISOString(), entityType: 'transaction', entityId: '*', action: 'delete', summary: `Permanently purged ${ids.length} deleted record(s)` });
     return ids.length;
   });

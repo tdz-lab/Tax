@@ -83,7 +83,7 @@ function LedgerTab() {
             </select>
             <select aria-label="Account" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
               <option value="">All accounts</option>
-              {accounts.map((a) => (
+              {accounts.filter((a) => !a.deletedAt).map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
@@ -139,7 +139,7 @@ function AccountsTab() {
     <div className="panel tight">
       <DataTable
         id="accounts"
-        rows={accounts}
+        rows={accounts.filter((a) => !a.deletedAt)}
         rowKey={(a) => a.id}
         onRowClick={(a) => setEdit(a)}
         toolbar={
@@ -306,7 +306,7 @@ function PerformanceTab() {
           </select>
           <select aria-label="Account" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
             <option value="">All accounts</option>
-            {accounts.map((a) => (
+            {accounts.filter((a) => !a.deletedAt).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>
@@ -433,7 +433,7 @@ function PropTab() {
   const { fy } = useApp();
   const accounts = useAccounts();
   const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active').toArray(), [fy], []) ?? [];
-  const propAccts = accounts.filter((a) => a.propStatus !== 'none' || a.type.startsWith('prop'));
+  const propAccts = accounts.filter((a) => !a.deletedAt && (a.propStatus !== 'none' || a.type.startsWith('prop')));
   const propIds = new Set(propAccts.map((a) => a.id));
   const rows = txns.filter((t) => t.category.startsWith('prop_') || propIds.has(t.accountId ?? ''));
   const tot = (pred: (c: string, k: string) => boolean) => {

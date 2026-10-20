@@ -137,7 +137,7 @@ function BalancesTab() {
           onClose={() => setEdit(null)}
           fields={[
             { key: 'type', label: 'Check type', type: 'select', options: [{ value: 'cash_balance', label: 'Cash balance' }, { value: 'holding', label: 'Holding quantity' }] },
-            { key: 'accountId', label: 'Account', type: 'select', includeEmpty: 'Choose…', options: accounts.map((a) => ({ value: a.id, label: a.name })), required: true },
+            { key: 'accountId', label: 'Account', type: 'select', includeEmpty: 'Choose…', options: accounts.filter((a) => !a.deletedAt).map((a) => ({ value: a.id, label: a.name })), required: true },
             { key: 'instrumentId', label: 'Instrument', type: 'select', includeEmpty: 'Choose…', options: instruments.map((i) => ({ value: i.id, label: i.symbol })), show: (r) => r.type === 'holding', required: true },
             { key: 'statementCurrency', label: 'Statement currency', type: 'text', show: (r) => r.type === 'cash_balance', hint: 'Defaults to account currency' },
             { key: 'asAtDate', label: 'Statement date (end of day)', type: 'date', required: true },

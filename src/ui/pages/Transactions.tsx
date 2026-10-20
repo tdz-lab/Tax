@@ -65,7 +65,7 @@ export function Transactions() {
           </select>
           <select aria-label="Account filter" value={f.accountId} onChange={(e) => setF({ ...f, accountId: e.target.value })}>
             <option value="">All accounts</option>
-            {accounts.map((a) => (
+            {accounts.filter((a) => !a.deletedAt).map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
               </option>

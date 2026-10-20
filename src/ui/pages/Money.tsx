@@ -45,7 +45,7 @@ export const capFirst = (v: string) => v.replace(/^(\s*)(\p{Ll})/u, (_, sp: stri
 const audAmount = (t: Transaction) => audOf(t, t.amount);
 
 /** Delete an account: removed outright when it has no records, otherwise hidden or deleted together with its records. */
-function DeleteAccountModal({ account, onBack, onDone }: { account: Account; onBack: () => void; onDone: () => void }) {
+export function DeleteAccountModal({ account, onBack, onDone }: { account: Account; onBack: () => void; onDone: () => void }) {
   const { run } = useApp();
   const counts = useLiveQuery(() => accountRecordCounts(account.id), [account.id]);
   const go = async (mode: 'hide' | 'delete_records') => {
@@ -76,9 +76,9 @@ function DeleteAccountModal({ account, onBack, onDone }: { account: Account; onB
         <p>This account has no records, so it can be deleted completely.</p>
       ) : counts.active === 0 ? (
         <>
-          <p>This account’s records are already deleted ({counts.deleted}), so it will be hidden. It disappears from your lists; it is kept only so those records can be restored.</p>
+          <p>This account’s {counts.deleted} record{counts.deleted === 1 ? ' is' : 's are'} already deleted. Deleting the account removes it from every list; it comes back only if you restore one of those records, and is gone for good when you purge deleted records (Settings → Data health).</p>
           <div className="row">
-            <button className="danger" onClick={() => go('hide')}>
+            <button className="danger" onClick={() => go('delete_records')}>
               Delete account
             </button>
           </div>
@@ -89,10 +89,12 @@ function DeleteAccountModal({ account, onBack, onDone }: { account: Account; onB
             “{account.name}” has <b>{counts.active} record{counts.active === 1 ? '' : 's'}</b> (all years). What would you like to do?
           </p>
           <div className="choice-cards">
-            <button type="button" className="choice-card" onClick={() => go('hide')}>
-              <b>Hide the account</b>
-              <span>It disappears from your lists, but its records stay and still count in your tax figures. You can show it again later.</span>
-            </button>
+            {!account.archived && (
+              <button type="button" className="choice-card" onClick={() => go('hide')}>
+                <b>Hide the account</b>
+                <span>It disappears from your lists, but its records stay and still count in your tax figures. You can show it again later.</span>
+              </button>
+            )}
             <button type="button" className="choice-card" style={{ borderColor: 'var(--bad)' }} onClick={() => go('delete_records')}>
               <b style={{ color: 'var(--bad)' }}>
                 Delete the account and its {counts.active} record{counts.active === 1 ? '' : 's'}
@@ -222,7 +224,10 @@ export function AccountModal({ initial, onClose, defaultType = 'income_source' }
 /** Quick money in / money out entry. */
 export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 'in' | 'out'; accountId?: string; onClose: () => void }) {
   const { run, fy, settings } = useApp();
-  const accounts = useAccounts().filter((a) => !a.archived && (usableFor(a, direction) || a.id === accountId));
+  // Money in offers only money-in and “both” accounts (money out the reverse); trading accounts live under Trading.
+  const accounts = useAccounts()
+    .filter((a) => a.id === accountId || (!a.archived && !isTradingType(a.type) && usableFor(a, direction)))
+    .sort((x, y) => Number(moneyUseOf(x) === 'both') - Number(moneyUseOf(y) === 'both') || x.name.localeCompare(y.name));
   const categories = useCategories().filter((c) => !c.archived && c.type === (direction === 'in' ? 'income' : 'expense'));
   const today = new Date().toISOString().slice(0, 10);
   const inYear = today >= fyStart(fy) && today <= fyEnd(fy) ? today : fyEnd(fy);
@@ -315,6 +320,7 @@ export function Money() {
   const [quick, setQuick] = useState<{ dir: 'in' | 'out'; accountId?: string } | null>(null);
   const [editAcct, setEditAcct] = useState<Account | { type: AccountType } | null>(null);
   const [move, setMove] = useState<string | null>(null);
+  const [delAcct, setDelAcct] = useState<Account | null>(null);
   const [filter, setFilter] = useState<string>('');
   const txns = useLiveQuery(() => getDb().transactions.where('fy').equals(fy).filter((t) => t.status === 'active' && (t.kind === 'income' || t.kind === 'expense' || t.kind === 'fee')).toArray(), [fy], []);
   const catName = useMemo(() => new Map(categories.map((c) => [c.code, c.name])), [categories]);
@@ -337,7 +343,8 @@ export function Money() {
   }, [txns]);
   // Brokers, exchanges and wallets live under Trading; their dividends etc. still appear in the profit & loss.
   const moneyAccounts = accounts.filter((a) => !a.archived && !isTradingType(a.type));
-  const hiddenAccounts = accounts.filter((a) => a.archived && !isTradingType(a.type));
+  const hiddenAccounts = accounts.filter((a) => a.archived && !a.deletedAt);
+  const tradingAccounts = accounts.filter((a) => !a.archived && isTradingType(a.type));
   return (
     <div className="simple-page">
       <div className="page-head">
@@ -488,6 +495,36 @@ export function Money() {
                 </section>
               );
             })}
+            {tradingAccounts.length > 0 && (
+              <section className="acct-section" aria-label="Trading accounts">
+                <div className="acct-section-head">
+                  <b>Trading accounts</b>
+                  <span className="faint">{tradingAccounts.length}</span>
+                  <span className="faint" style={{ marginLeft: 'auto', fontSize: 12 }}>
+                    add trades on <a href="#/add-trades">Add trades</a>
+                  </span>
+                </div>
+                <div className="acct-scroll">
+                  <table className="pl-table">
+                    <tbody>
+                      {tradingAccounts.map((a) => (
+                        <tr key={a.id}>
+                          <td>
+                            {a.name}
+                            <div className="faint" style={{ fontSize: 11 }}>{ACCOUNT_TYPE_LABEL[a.type].split(' (')[0]}</div>
+                          </td>
+                          <td className="acct-actions">
+                            <button className="small link" onClick={() => setEditAcct(a)} aria-label={`Edit ${a.name}`}>
+                              Edit
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            )}
             {hiddenAccounts.length > 0 && (
               <details style={{ marginTop: 8 }}>
                 <summary className="muted">Hidden accounts ({hiddenAccounts.length})</summary>
@@ -503,6 +540,9 @@ export function Money() {
                           <td style={{ textAlign: 'right' }}>
                             <button className="small" onClick={() => run(() => saveEntity('accounts', { ...a, archived: false, updatedAt: nowIso() }), { success: `“${a.name}” is shown again.` })}>
                               Show again
+                            </button>{' '}
+                            <button className="small danger" onClick={() => setDelAcct(a)} aria-label={`Delete ${a.name}`}>
+                              Delete…
                             </button>
                           </td>
                         </tr>
@@ -520,6 +560,7 @@ export function Money() {
       </div>
       {quick && <QuickMoneyModal direction={quick.dir} accountId={quick.accountId} onClose={() => setQuick(null)} />}
       {editAcct && <AccountModal initial={'id' in editAcct ? editAcct : undefined} defaultType={'id' in editAcct ? undefined : editAcct.type} onClose={() => setEditAcct(null)} />}
+      {delAcct && <DeleteAccountModal account={delAcct} onBack={() => setDelAcct(null)} onDone={() => setDelAcct(null)} />}
       {move !== null && <TxnEditor initial={{ kind: 'transfer', side: 'send', accountId: move || undefined, currency: accounts.find((a) => a.id === move)?.currency }} onClose={() => setMove(null)} />}
     </div>
   );
