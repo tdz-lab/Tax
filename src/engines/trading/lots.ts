@@ -41,7 +41,14 @@ export interface Allocation {
   gainAud: Decimal | null;
   heldDays: number;
   discountEligible: boolean;
+  /** Acquired before 20 September 1985 on capital account: gain or loss disregarded (pre-CGT). */
+  preCgt?: boolean;
 }
+
+/** CGT applies to assets acquired on or after 20 September 1985 (ITAA 1997 Div 104 / s 104-10(5)). */
+export const CGT_START_DATE = '1985-09-20';
+/** Indexation may be chosen instead of the discount for assets acquired before 11:45 am 21 September 1999 (s 114-10, s 115-20). */
+export const INDEXATION_CUTOFF_DATE = '1999-09-21';
 
 export interface Disposal {
   id: string;
@@ -62,6 +69,8 @@ export interface Disposal {
   discountableGainAud: Decimal; // part of a positive gain eligible for discount
   nonDiscountableGainAud: Decimal;
   lossAud: Decimal; // positive number
+  /** Gain (+) or loss (−) on pre-CGT parcels that is disregarded. */
+  preCgtDisregardedAud?: Decimal;
   method: CostBasisMethod;
   allocations: Allocation[];
   flags: string[];
@@ -258,8 +267,9 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     const proceeds = input.proceedsAud === null ? null : input.proceedsAud.times(qty).div(input.quantity);
     const gain = proceeds === null || cost === null ? null : proceeds.minus(cost);
     const held = heldAtLeast12Months(lot.acquiredDate, disposedDate);
-    const eligible = input.group === 'capital' && held && !input.noDiscount;
-    if (!eligible) allEligible = false;
+    const preCgt = input.group === 'capital' && !!lot.acquiredDate && lot.acquiredDate < CGT_START_DATE;
+    const eligible = input.group === 'capital' && held && !input.noDiscount && !preCgt;
+    if (!eligible && !preCgt) allEligible = false;
     allocations.push({
       lotId: lot.id,
       sourceTxnId: lot.sourceTxnId,
@@ -269,7 +279,8 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
       proceedsAud: proceeds,
       gainAud: gain,
       heldDays: daysBetween(lot.acquiredDate, disposedDate),
-      discountEligible: eligible
+      discountEligible: eligible,
+      ...(preCgt ? { preCgt: true } : {})
     });
     costTotal = costTotal === null || cost === null ? null : costTotal.plus(cost);
     costNative = costNative === null || cn === null ? null : costNative.plus(cn);
@@ -293,15 +304,24 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
   let discountable = ZERO;
   let nonDiscountable = ZERO;
   let loss = ZERO;
+  let preCgtAmt = ZERO;
   if (gain !== null) {
     // Split per allocation so mixed holding periods are handled exactly.
     for (const a of allocations) {
       const g = a.gainAud!;
-      if (g.gt(ZERO)) {
+      if (a.preCgt) preCgtAmt = preCgtAmt.plus(g);
+      else if (g.gt(ZERO)) {
         if (a.discountEligible) discountable = discountable.plus(g);
         else nonDiscountable = nonDiscountable.plus(g);
       } else loss = loss.plus(g.neg());
     }
+  }
+  if (allocations.some((a) => a.preCgt)) {
+    flags.push(`PRE_CGT: parcel(s) acquired before ${CGT_START_DATE} — gain/loss disregarded. Confirm the acquisition date (and that no corporate action or major improvement changed pre-CGT status).`);
+    ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'PRE_CGT', message: `Disposal of ${inst.symbol} includes pre-CGT parcels (acquired before 20 September 1985) — gain/loss disregarded; confirm.` });
+  }
+  if (input.group === 'capital' && allocations.some((a) => !a.preCgt && a.acquiredDate && a.acquiredDate < INDEXATION_CUTOFF_DATE && a.heldDays >= 365)) {
+    ctx.issues.push({ txnId: txn.id, instrumentId: input.instrumentId, code: 'INDEXATION_OPTION', message: `Disposal of ${inst.symbol} includes parcels acquired before 21 September 1999: the indexation method may be chosen instead of the discount. Indexation is not calculated (CPI factors not entered) — the discount method is used.` });
   }
   const taxClass = input.forceClass ?? classForGroup(input.group);
   if (input.group === 'unresolved') flags.push('Account tax treatment not determined — result requires classification (investor vs trader).');
@@ -320,10 +340,11 @@ function dispose(ctx: Ctx, input: DisposeInput): Disposal {
     proceedsAud: input.proceedsAud,
     costAud: costTotal,
     gainAud: gain,
-    discountEligible: allEligible && allocations.length > 0,
+    discountEligible: allEligible && allocations.some((a) => !a.preCgt),
     discountableGainAud: discountable,
     nonDiscountableGainAud: nonDiscountable,
     lossAud: loss,
+    ...(allocations.some((a) => a.preCgt) ? { preCgtDisregardedAud: preCgtAmt } : {}),
     method,
     allocations,
     flags,

@@ -5,7 +5,9 @@ import { TAX_CLASS_INFO } from '../../domain/reference';
 import type { CalculationRun } from '../../domain/types';
 import { D, formatMoney, formatQty } from '../../lib/decimal';
 import { formatDate, formatInstant, fyLabel, fyLongLabel } from '../../lib/dates';
-import { ruleSetFor } from '../../engines/tax/rules';
+import { ruleSetFor, type CheckStatus } from '../../engines/tax/rules';
+
+const CHECK_LABEL: Record<CheckStatus, string> = { ato_search_summary: 'ATO page (search summary)', statutory_reference: 'Legislation reference', conflicting: 'Conflicting sources', unverified: 'Not confirmed' };
 import type { TaxLine, TaxYearResult } from '../../engines/tax/taxEngine';
 import { diffSummaries, saveCalculationRun } from '../../services/calc';
 import { useApp } from '../AppContext';
@@ -219,6 +221,37 @@ export function TaxCalc() {
               <p>
                 Status: <StatusBadge status={rs.status} /> · Resident brackets: {rs.residentBrackets.map((b) => `${(Number(b.rate) * 100).toFixed(1)}% over $${b.above.toLocaleString()}`).join('; ')}
               </p>
+              {rs.checks && rs.checks.length > 0 && (
+                <details className="adv" open>
+                  <summary>How each figure was checked</summary>
+                  <p className="muted">“ATO page (search summary)” means the figure matched an ato.gov.au page as returned by a web search on the date shown — the page itself could not be opened from the build environment. No figure has been reviewed by a registered tax agent.</p>
+                  <table className="dt">
+                    <thead>
+                      <tr>
+                        <th>Parameter</th>
+                        <th>Check</th>
+                        <th>Note / source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rs.checks.map((c) => (
+                        <tr key={c.param}>
+                          <td className="mono">{c.param}</td>
+                          <td>
+                            <span className={`badge ${c.status === 'conflicting' || c.status === 'unverified' ? 'warn' : ''}`}>{CHECK_LABEL[c.status]}</span>
+                          </td>
+                          <td>
+                            {c.note && <div>{c.note}</div>}
+                            <div className="muted" style={{ fontSize: 11.5 }}>
+                              {c.source} · {c.checkedOn}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </details>
+              )}
               <details className="adv">
                 <summary>Sources, notes and items not calculated</summary>
                 <ul className="list-plain">

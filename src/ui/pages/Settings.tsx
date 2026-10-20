@@ -644,6 +644,8 @@ function RulesTab() {
             { key: 's', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
             { key: 'b', header: 'Resident rates', render: (r) => r.residentBrackets.map((b) => `${(Number(b.rate) * 100).toFixed(1)}%>${b.above}`).join(' ') },
             { key: 'm', header: 'Medicare low-income', render: (r) => (r.medicareLowIncome ? `${r.medicareLowIncome.singleLower}–${r.medicareLowIncome.singleUpper}` : <span className="badge warn">not verified</span>) },
+            { key: 'chk', header: 'Unconfirmed figures', render: (r) => (r.checks ? r.checks.filter((c) => c.status === 'conflicting' || c.status === 'unverified').map((c) => c.param).join(', ') || 'none' : '—') },
+            { key: 'sup', header: 'Superseded by', render: (r) => r.supersededBy ?? '' },
             { key: 'src', header: 'Sources', render: (r) => r.sources.length }
           ]}
         />

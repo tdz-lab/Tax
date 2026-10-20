@@ -257,6 +257,12 @@ export interface Transaction {
   unfrankedAmount?: DecStr; // AUD
   taxDeferredAmount?: DecStr; // non-assessable component (in `currency`)
   capitalGainComponent?: DecStr; // trust distribution capital gain component (AUD)
+  // Trust annual tax statement (AMMA) capital-gain components (AUD). When any is present they
+  // replace `capitalGainComponent`: the discounted amount is grossed up ×2 (with the CGT concession amount).
+  cgDiscountedComponent?: DecStr; // discounted capital gain (after the trust's 50% discount)
+  cgIndexationComponent?: DecStr;
+  cgOtherComponent?: DecStr;
+  exDividendDate?: string; // dividends: for the 45-day holding period check
   businessUsePct?: DecStr; // 0–100, defaults 100 for business, per-category for personal
   isBusiness?: boolean;
   gstTreatment?: GstTreatment;
@@ -348,8 +354,20 @@ export interface TaxProfile {
   dependants?: number;
   helpDebt: YesNoUnknown;
   openingCapitalLosses?: DecStr; // net capital losses carried in from years not recorded in the app
-  openingRevenueLosses?: DecStr;
+  openingRevenueLosses?: DecStr; // prior-year tax losses (revenue) carried into this year
   paygInstalments?: DecStr;
+  // --- added v1.2: inputs for part-year residency, Medicare family test, MLS and HELP ---
+  residentMonths?: number; // part-year residents: months resident (1–11)
+  spouseTaxableIncome?: DecStr; // spouse's taxable income (Medicare levy family test)
+  spouseMlsIncome?: DecStr; // spouse's income for MLS purposes
+  reportableFringeBenefits?: DecStr;
+  reportableSuperContributions?: DecStr;
+  netInvestmentLoss?: DecStr; // total net financial investment loss + net rental property loss (positive number)
+  exemptForeignEmploymentIncome?: DecStr;
+  daysWithoutCover?: number; // days in the year without appropriate private hospital cover
+  helpBalance?: DecStr; // study-loan balance at 1 June (caps the compulsory repayment)
+  forexLimitedBalanceElection?: YesNoUnknown; // Div 775 limited balance election in force
+
   otherOffsets?: DecStr;
   otherOffsetsNote?: string;
   notes?: string;

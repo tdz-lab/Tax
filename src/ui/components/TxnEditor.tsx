@@ -279,7 +279,11 @@ export function TxnEditor({ initial, onClose }: { initial: Draft; onClose: () =>
             <DecimalInput label="Unfranked amount (AUD)" value={draft.unfrankedAmount} onChange={(v) => set({ unfrankedAmount: v })} />
             <DecimalInput label="Franking credit (AUD)" value={draft.frankingCredit} onChange={(v) => set({ frankingCredit: v })} />
             <DecimalInput label="Tax-deferred component" value={draft.taxDeferredAmount} onChange={(v) => set({ taxDeferredAmount: v })} hint="Reduces cost base of the holding" />
-            <DecimalInput label="Capital gain component (AUD)" value={draft.capitalGainComponent} onChange={(v) => set({ capitalGainComponent: v })} />
+            <DecimalInput label="Capital gain component (AUD)" value={draft.capitalGainComponent} onChange={(v) => set({ capitalGainComponent: v })} hint="Single total — prefer the AMMA components below" />
+            <DecimalInput label="Discounted capital gain (AMMA, AUD)" value={draft.cgDiscountedComponent} onChange={(v) => set({ cgDiscountedComponent: v })} hint="After the trust's 50% discount; grossed up ×2" />
+            <DecimalInput label="Capital gain — indexation method (AUD)" value={draft.cgIndexationComponent} onChange={(v) => set({ cgIndexationComponent: v })} />
+            <DecimalInput label="Capital gain — other method (AUD)" value={draft.cgOtherComponent} onChange={(v) => set({ cgOtherComponent: v })} />
+            <TextInput label="Ex-dividend date" type="date" value={draft.exDividendDate} onChange={(v) => set({ exDividendDate: v || undefined })} hint="Needed for the 45-day rule when franking credits exceed $5,000" />
             <Check label="Business income" checked={draft.isBusiness} onChange={(v) => set({ isBusiness: v })} />
           </div>
         </fieldset>

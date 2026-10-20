@@ -246,6 +246,10 @@ export function buildBasicReport(ctx: ReportContext): Blob {
   b.heading('Rule set');
   const rs = r.ruleSetId ? ruleSetFor(ctx.options.fy) : null;
   b.para(rs ? `${rs.id} (${rs.status}). Sources: ${rs.sources.join('; ')}. Not implemented: ${rs.notImplemented.join('; ')}.` : 'No rule set available for this year.');
+  if (rs?.checks?.length) {
+    const weak = rs.checks.filter((c) => c.status === 'conflicting' || c.status === 'unverified');
+    b.para(`Parameter checks (${rs.checks[0].checkedOn}): figures were compared with ATO web pages through search summaries, not read directly and not reviewed by a registered tax agent. ${weak.length ? `Unconfirmed or conflicting: ${weak.map((c) => `${c.param} (${c.status}${c.note ? ': ' + c.note : ''})`).join('; ')}.` : 'No parameter is marked unconfirmed for this year.'}`);
+  }
   return b.finish();
 }
 

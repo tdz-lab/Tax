@@ -34,15 +34,15 @@ describe('resident tax rates (ATO published tables)', () => {
     expect(litoAmount(D(70000), rs25).toFixed(2)).toBe('0.00');
   });
   it('Medicare levy with low-income shade-in (FY2024–25 single thresholds $27,222 / $34,027)', () => {
-    expect(medicareLevy(D(20000), rs25, 'none').levy.toFixed(2)).toBe('0.00');
-    expect(medicareLevy(D(30000), rs25, 'none').levy.toFixed(2)).toBe('277.80'); // 10% × (30,000 − 27,222)
-    expect(medicareLevy(D(80000), rs25, 'none').levy.toFixed(2)).toBe('1600.00');
-    expect(medicareLevy(D(80000), rs25, 'half').levy.toFixed(2)).toBe('800.00');
+    expect(medicareLevy(D(20000), rs25, 'none').levy!.toFixed(2)).toBe('0.00');
+    expect(medicareLevy(D(30000), rs25, 'none').levy!.toFixed(2)).toBe('277.80'); // 10% × (30,000 − 27,222)
+    expect(medicareLevy(D(80000), rs25, 'none').levy!.toFixed(2)).toBe('1600.00');
+    expect(medicareLevy(D(80000), rs25, 'half').levy!.toFixed(2)).toBe('800.00');
   });
-  it('FY2025–26 Medicare thresholds are not verified, so the estimate is flagged unreliable for low incomes', () => {
-    const rs26 = ruleSetFor(2026)!;
-    expect(rs26.medicareLowIncome).toBeNull();
-    expect(medicareLevy(D(30000), rs26, 'none').reliable).toBe(false);
+  it('FY2026–27 Medicare thresholds are not confirmed, so the estimate is flagged unreliable for low incomes', () => {
+    const rs27 = ruleSetFor(2027)!;
+    expect(rs27.medicareLowIncome).toBeNull();
+    expect(medicareLevy(D(30000), rs27, 'none').reliable).toBe(false);
   });
 });
 

@@ -35,7 +35,7 @@ producing professional PDF reports for review by a registered tax agent.
 20. [Project layout](#20-project-layout)
 
 Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](docs/ARCHITECTURE.md) ·
-[Known limitations](docs/KNOWN_LIMITATIONS.md) · [Test report](docs/TESTING.md) ·
+[Known limitations](docs/KNOWN_LIMITATIONS.md) · [Validation status](docs/VALIDATION_STATUS.md) · [Test report](docs/TESTING.md) ·
 [Adding a connector](docs/CONNECTORS.md)
 
 ---
@@ -45,9 +45,9 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 | Area | Implemented |
 | --- | --- |
 | **Dashboard** | Income, business, deductions, estimated taxable income, CGT gains/losses, trading results by tax classification, dividends, crypto income, foreign income & FX exposure, data-quality counts (unclassified, missing cost bases, missing rates, unmatched transfers, duplicates, reconciliation, missing evidence), readiness, last backup/import. Every total opens its source records. |
-| **Tax & Business** | Income and expense ledgers with configurable categories, business-use %, GST tracking, split transactions, recurring entries; sole-trader profile (ABN, GST registration, BAS frequency); business P&L and cash-flow; GST/BAS quarterly summaries; asset register with prime-cost / diminishing-value / instant write-off / low-value-pool depreciation; vehicle, travel and home-office logs; trading-stock records; per-year tax profile (residency, Medicare, private cover, HELP, carried-forward losses). |
+| **Tax & Business** | Income and expense ledgers with configurable categories, business-use %, GST tracking, split transactions, recurring entries; sole-trader profile (ABN, GST registration, BAS frequency); business P&L and cash-flow; GST/BAS quarterly summaries; asset register with prime-cost / diminishing-value / instant write-off / low-value-pool depreciation; vehicle, travel and home-office logs; trading-stock records; per-year tax profile (residency incl. part-year months, Medicare, spouse and dependants, private cover and days without cover, income-test amounts, HELP and loan balance, carried-forward capital and tax losses, forex election). |
 | **Trading & Investments** | Multiple accounts (brokers, exchanges, wallets, futures, forex, CFD, options, prop-firm evaluation/funded, bank) each with an explicit tax treatment; instrument registry (multipliers, tick size, expiry, strike, call/put, spam flag); trade ledger; holdings and acquisition parcels; economic performance (separate from tax); derivative positions; prop-firm fees/payouts; corporate actions (splits, consolidations, bonus issues, scrip-for-scrip rollover, spin-offs, return of capital, symbol changes). |
-| **Engines** | Decimal arithmetic everywhere; CGT parcel engine (FIFO, specific identification, LIFO/HIFO identification orders), partial disposals, 12-month discount test, loss netting and carry-forward; crypto-to-crypto swaps, stablecoin quote assets, staking income, forks, own-wallet transfers, network fees; futures/CFD/forex/short-position P&L; written-option D2 events; versioned tax rule sets with sources; historical FX engine with provenance. |
+| **Engines** | Decimal arithmetic everywhere; CGT parcel engine (FIFO, specific identification, LIFO/HIFO identification orders), partial disposals, 12-month discount test, loss netting and carry-forward; crypto-to-crypto swaps, stablecoin quote assets, staking income, forks, own-wallet transfers, network fees; futures/CFD/forex/short-position P&L; written-option D2 events; versioned tax rule sets with a per-parameter check record; Medicare levy family test, Medicare levy surcharge, study-loan repayments (2025–26), part-year and working-holiday-maker scales, FITO limit, tax-loss carry-forward, trust AMMA capital-gain components, pre-CGT exemption, review flags for indexation, wash sales, franking 45-day rule and Div 775 forex; historical FX engine with provenance. |
 | **Imports** | CSV import wizard with automatic layout detection, column mapping, constants, value mapping, date-format detection (day-first vs month-first), time zones, validation, duplicate detection (source IDs + occurrence-aware fingerprints), preview of totals, atomic commit, rejected-row reporting, rollback, reusable templates, 13 sample files. Wide (one column per currency) and long rate tables. |
 | **Documents** | Local storage of PDF/JPG/PNG/CSV files with SHA-256, linking to any record, missing-evidence views, basic local metadata extraction (no OCR). |
 | **Tax calculations** | Recorded totals, calculated amounts, estimates, items awaiting review and readiness kept separate; traceability to records; rule-set version and warnings; immutable calculation snapshots with history. |
@@ -64,10 +64,12 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 * **No automatic download** of exchange rates or prices — you import published tables (e.g. RBA historical rates)
   or enter rates with their source. Missing rates are flagged, never guessed.
 * **No OCR** or automatic reading of PDF statements.
-* Several personal-tax items are **not calculated** (HELP repayments, Medicare levy surcharge, private health
-  insurance rebate, family thresholds, non-commercial loss rules, FITO above the $1,000 de minimis, ETP
-  concessions, part-year residency, working holiday makers). They are flagged in the results.
-  Full list: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+* Some personal-tax items are **not calculated** or only partly calculated: HELP repayments outside 2025–26,
+  the Medicare family reduction between the family thresholds, SAPTO, private health insurance rebate,
+  non-commercial loss rules, forex gains on foreign currency balances (Div 775), indexation, ETP concessions. They
+  are flagged in the results. Full list: [docs/KNOWN_LIMITATIONS.md](docs/KNOWN_LIMITATIONS.md).
+* **Not tax-ready on its own.** Rates and thresholds were compared with ATO pages through web-search summaries and
+  nothing has been reviewed by a registered tax agent — see [docs/VALIDATION_STATUS.md](docs/VALIDATION_STATUS.md).
 
 ## 3. System requirements
 
@@ -79,7 +81,7 @@ Further documents: [Tax methodology](docs/TAX_METHODOLOGY.md) · [Architecture](
 ## 4. Installation and first launch
 
 1. **Install Node.js** from <https://nodejs.org> (LTS version, default options).
-2. **Unzip** `au-tax-trading-ledger-1.1.0.zip` somewhere permanent, e.g. your Documents folder.
+2. **Unzip** `au-tax-trading-ledger-1.2.0.zip` somewhere permanent, e.g. your Documents folder.
 3. **Start the application:**
    * **Windows:** double-click `start-windows.bat`.
    * **macOS:** right-click `start-mac.command` → *Open* (the first time macOS may ask you to confirm).
@@ -214,8 +216,12 @@ See [docs/TAX_METHODOLOGY.md](docs/TAX_METHODOLOGY.md) for exactly how each item
 * CGT: parcels matched by the selected method; brokerage in cost base/proceeds; 50% discount only for
   capital-account assets held at least 12 months (acquisition and disposal days excluded) by residents;
   losses applied before the discount; carry-forward computed year to year (or from an opening balance you enter).
-* Tax estimates use **versioned rule sets** (FY2022–23 to FY2026–27) with sources and verification status.
-  Unverified parameters are flagged; unimplemented items are listed.
+* Tax estimates use **versioned rule sets** (FY2022–23 to FY2026–27). Every parameter records how it was checked
+  (ATO page via search summary, legislation, conflicting, or not confirmed) — shown under *Tax Calculations → How
+  each figure was checked* and in the PDF report. Unconfirmed parameters are left out (and the calculation flagged)
+  or used with a warning; unimplemented items are listed.
+* The estimate includes the Medicare levy (single and family test), Medicare levy surcharge, study-loan repayment
+  (2025–26), the foreign income tax offset limit and carried-forward tax losses, each with the assumptions shown.
 * *Tax Calculations* shows recorded totals, calculated amounts, estimates, items awaiting review and readiness
   separately; every line opens its source records. *Save calculation snapshot* stores an immutable snapshot with
   the rule-set version, an input fingerprint and your reason; earlier snapshots are never rewritten.

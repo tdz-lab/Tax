@@ -121,7 +121,9 @@ export function isValidZone(tz: string): boolean {
 
 /** Add calendar days to an ISO date. */
 export function addDays(isoDate: string, days: number): string {
-  return DateTime.fromISO(isoDate).plus({ days }).toISODate()!;
+  // Pure calendar arithmetic in UTC (no time-zone or DST effects); much faster than Luxon in hot loops.
+  const t = Date.UTC(Number(isoDate.slice(0, 4)), Number(isoDate.slice(5, 7)) - 1, Number(isoDate.slice(8, 10)) + days);
+  return new Date(t).toISOString().slice(0, 10);
 }
 
 /** Whole days between two ISO dates (b - a). */

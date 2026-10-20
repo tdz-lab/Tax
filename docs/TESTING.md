@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 2026 (Australia/Sydney).
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.2.0.
 
 ## Commands and results
 
@@ -9,7 +9,7 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
 | --- | --- | --- |
 | `npm run typecheck` | TypeScript strict mode, app + tests + configs | **Passed** (0 errors) |
 | `npm run lint` | ESLint (typescript-eslint, react-hooks) | **Passed** (0 errors, 0 warnings) |
-| `npm test` | 103 unit/integration tests in 9 files | **103 passed, 0 failed** |
+| `npm test` | 154 unit/integration tests in 10 files | **154 passed, 0 failed** |
 | `npm run build` | Production build + service worker (Workbox precache of 41 entries) | **Passed** |
 | `npm run test:e2e` | 5 Playwright tests against the production build (incl. every tutorial step) | **5 passed, 0 failed** |
 
@@ -30,11 +30,32 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
 * **Database migration**: a real v1 database is created and opened with the v2 schema; records preserved and
   back-filled; compound index usable; migration audited.
 
+### Independently derived tax tests (`tests/unit/tax-independent.test.ts`, new in 1.2.0 — 51 tests)
+* **Separate reference implementation**: integer-cents tax from the ATO’s “$base + c for each $1 over $threshold”
+  tables (typed from the ATO text, not from the app’s rule sets) compared with the engine at 25 incomes per scale,
+  including every threshold and threshold + $1, for resident 2022–23 to 2026–27, foreign resident 2025–26 and
+  working holiday makers 2024–25 / 2025–26; continuity of the ATO base amounts.
+* **ATO worked examples**: part-year tax-free threshold (3 months $14,648; 6 months $15,832); FITO limit
+  ($2,581.80 − $260.80 = $2,321.00 with $3,400 paid).
+* **Hand-calculated edge cases**: Medicare single shade-in at $28,011 / $30,000 / $35,013 / $35,014; family test
+  (exactly at the threshold, children, sole parent, between thresholds → flagged, above the limit, missing spouse
+  income → flagged); MLS tiers at threshold and threshold + $1, RFB / net investment loss, days without cover,
+  family + per-child increase, leap-year day count; HELP 2025–26 at every band boundary and $1 either side of
+  $179,285; FITO default limit.
+* **Provenance**: no built-in current rule set claims “verified”; every one records checks for each core
+  parameter; version 1 sets retained; conflicting/unconfirmed parameters are null rather than guessed.
+* **Engine scenarios**: FITO limit above $1,000; HELP added to payable and capped at the balance; HELP 2024–25
+  flagged; MLS included / not guessed when cover unknown; Medicare family nil levy; part-year estimate and
+  missing-months block; WHM 2025–26 and unsupported 2023–24; prior-year and current-year tax losses; trust AMMA
+  gross-up with losses and re-discount; pre-CGT disregarded (19 Sep 1985 vs 20 Sep 1985 boundary, indexation flag);
+  wash-sale flag; franking > $5,000 without ex-date, possible holding-period failure, ≤ $5,000 exemption; Div 775
+  warning vs recorded election; crypto personal-use note.
+
 ### Australian tax (`tests/unit/tax.test.ts`) — expected values hand-calculated from published ATO tables/formulas
 * Resident rates FY2024–25 at $80,000 ($14,788), $150,000 ($36,838), $200,000 ($56,138); FY2023–24 at $80,000
   ($16,467); non-resident FY2024–25.
 * LITO at $30k/$40k/$50k/$70k; Medicare levy shade-in (FY2024–25 singles thresholds) and half exemption; flagged
-  when thresholds are unverified (FY2025–26).
+  when thresholds are not confirmed (FY2026–27).
 * CGT netting order (losses before discount; non-discount first), carry-forward.
 * Scenarios: salary + deduction → refund ($89,000 taxable income, $17,488 tax, $1,780 Medicare, −$732);
   GST-registered business income/expenses and BAS credits; franked dividends gross-up and offset; foreign
@@ -77,7 +98,7 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
 
 ### Performance (`tests/unit/performance.test.ts`)
 * 100,000 transactions (shares across 50 instruments, futures, expenses): lot + derivative engines **≈1.7 s**,
-  tax-year computation **≈0.16 s**, 25,456 disposals, no incomplete results (measured in the test container).
+  tax-year computation **≈0.18 s**, 25,456 disposals, no incomplete results (measured in the test container).
 
 ### Browser end-to-end (`tests/e2e`, production build)
 1. **Complete workflow** — record residency (autosave) → create an income record → autosaved edit → attach a
@@ -93,7 +114,7 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
    console errors; a dashboard total opens its source records.
 
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)
-4. **Every tutorial step** — with practice data loaded, all 30 tutorials (316 steps) are run from the Tutorials
+4. **Every tutorial step** — with practice data loaded, all 30 tutorials (318 steps) are run from the Tutorials
    page; at every step the highlighted element must be found on screen. “Your turn” steps are skipped (so the test
    also proves later steps recover when a user skips); the only exceptions are 11 steps that by design need the
    user’s action first (e.g. the mapping screen after choosing a CSV file, the conversion panel of a just-saved
@@ -112,10 +133,15 @@ Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 19–20 October 20
 
 ## Not tested / limitations of testing
 
+* **What the tax tests prove — and do not prove.** They show that the code reproduces the rates, thresholds and
+  formulas as read from ATO pages, and that two independent implementations agree. They do **not** prove those
+  figures are complete or current: the ATO pages were read through web-search summaries because ato.gov.au was
+  blocked in the build environment (see [VALIDATION_STATUS.md](VALIDATION_STATUS.md)). Nothing was compared with
+  ATO lodgment software or reviewed by a registered tax agent. Passing tests does not make the application
+  tax-ready.
 * Browsers other than Chromium (Firefox, Safari, mobile browsers) were not tested automatically.
 * Installation via the double-click launchers on real Windows/macOS machines was not performed (the launchers
   call the same `node scripts/serve.mjs` that was tested on Linux).
 * The File System Access “Save as” dialog cannot be automated; tests use the download fallback.
-* Tax expectations are hand-calculated from public ATO tables and formulas and **have not been reviewed by a
-  registered tax agent**. Passing these tests does not prove the application is correct for every taxpayer.
-* Rule sets for FY2025–26 (partially verified) and FY2026–27 (unverified) are not covered by expected-value tests.
+* The franking 45-day check, wash-sale flag and Div 775 warning are review heuristics; their tests prove the flags
+  appear, not that the underlying legal tests are satisfied.

@@ -360,7 +360,18 @@ export function prepareRows(rows: Record<string, string>[], ctx: PrepareContext)
         if (td && !D(td).isZero()) p.taxDeferredAmount = D(td).abs().toFixed();
         const cg = n('capitalGain');
         if (cg && !D(cg).isZero()) p.capitalGainComponent = D(cg).abs().toFixed();
-        const hasComponents = (td && D(td).gt(0)) || (cg && D(cg).gt(0));
+        for (const [k, f] of [['cgDiscounted', 'cgDiscountedComponent'], ['cgIndexation', 'cgIndexationComponent'], ['cgOther', 'cgOtherComponent']] as const) {
+          const v = n(k);
+          if (v && !D(v).isZero()) p[f] = D(v).abs().toFixed();
+        }
+        if (get('exDividendDate')) {
+          try {
+            p.exDividendDate = parseWhen(get('exDividendDate')!, undefined, dateFormat, tz).date;
+          } catch {
+            warnings.push('Ex-dividend date not recognised — ignored.');
+          }
+        }
+        const hasComponents = (td && D(td).gt(0)) || (cg && D(cg).gt(0)) || p.cgDiscountedComponent || p.cgIndexationComponent || p.cgOtherComponent;
         p.category = category || (currency === 'AUD' ? (hasComponents ? 'distribution' : 'dividend_au') : 'dividend_foreign');
         if (p.quantity) delete p.quantity; // units held are informational for dividends; don't create lots
         if (n('quantity')) p.notes = [p.notes, `Units held: ${n('quantity')}`].filter(Boolean).join(' · ');

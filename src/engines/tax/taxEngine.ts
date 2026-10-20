@@ -6,15 +6,18 @@
  * missing exchange rate, missing cost base or unresolved classification is silently included.
  */
 import { D, Decimal, dstr, toWholeDollarsDown, tryD } from '../../lib/decimal';
-import { fyLabel, type FYear } from '../../lib/dates';
-import { TAX_CLASS_INFO } from '../../domain/reference';
+import { addDays, fyLabel, type FYear } from '../../lib/dates';
+import { TAX_CLASS_INFO, isFiat } from '../../domain/reference';
 import type { Asset, BusinessProfile, Category, TaxClass, TaxProfile, Transaction } from '../../domain/types';
 import { ZERO, audOf, type LedgerData } from '../ledger';
 import { runLotEngine, type Disposal, type LotEngineResult } from '../trading/lots';
 import { runDerivativeEngine, type DerivativeResult, type RealisedEvent } from '../trading/derivatives';
 import { depreciationSchedule } from '../business/depreciation';
 import { basSummary, type BasPeriod } from '../business/gst';
-import { ruleSetFor, type Bracket, type TaxRuleSet } from './rules';
+import { checksFor, ruleSetFor, type Bracket, type TaxRuleSet } from './rules';
+import { daysInFy, fitoClaim, fitoLimit, helpRepayment, medicareLevy, mlsAmount, partYearBrackets, partYearThreshold, type FamilyInput, type LevyResult } from './individual';
+
+export { medicareLevy } from './individual';
 
 export type LineStatus = 'recorded' | 'calculated' | 'estimate' | 'review' | 'incomplete';
 
@@ -159,20 +162,6 @@ export function litoAmount(ti: Decimal, rs: TaxRuleSet): Decimal {
   return ZERO;
 }
 
-export function medicareLevy(ti: Decimal, rs: TaxRuleSet, exemption: TaxProfile['medicareExemption']): { levy: Decimal; note: string; reliable: boolean } {
-  const rate = D(rs.medicareLevyRate);
-  let factor = new Decimal(1);
-  if (exemption === 'full') return { levy: ZERO, note: 'Full Medicare levy exemption recorded.', reliable: true };
-  if (exemption === 'half') factor = new Decimal('0.5');
-  const li = rs.medicareLowIncome;
-  if (!li) {
-    return { levy: ti.times(rate).times(factor), note: `${dstr(rate.times(100))}% of taxable income; low-income reduction NOT applied (thresholds not verified for this year).`, reliable: ti.gt(60000) };
-  }
-  if (ti.lte(li.singleLower)) return { levy: ZERO, note: `Below single low-income threshold $${li.singleLower}.`, reliable: true };
-  if (ti.lte(li.singleUpper)) return { levy: Decimal.min(ti.minus(li.singleLower).times(li.shadeInRate), ti.times(rate)).times(factor), note: `Shade-in: ${li.shadeInRate} × (TI − $${li.singleLower}). Singles thresholds only.`, reliable: true };
-  return { levy: ti.times(rate).times(factor), note: `${dstr(rate.times(100))}% of taxable income${factor.lt(1) ? ' (half exemption)' : ''}. Singles thresholds assumed.`, reliable: true };
-}
-
 function disposalOut(d: Disposal): CgtDisposalOut {
   return {
     id: d.id,
@@ -274,7 +263,27 @@ interface YearCapital {
   disposals: Disposal[];
   derivCapital: RealisedEvent[];
   trustTxnIds: string[];
+  trustUnsplitIds: string[];
   withheld: Decimal;
+}
+
+/**
+ * Trust capital gains from a distribution. With AMMA components the discounted gain is grossed up
+ * ×2 (the other half being the CGT concession amount); otherwise the single recorded component is
+ * treated as a non-discount gain (flagged).
+ */
+export function trustCapital(t: Transaction): { discountGross: Decimal; other: Decimal; cashPortion: Decimal; split: boolean } | null {
+  const disc = tryD(t.cgDiscountedComponent);
+  const idx = tryD(t.cgIndexationComponent);
+  const oth = tryD(t.cgOtherComponent);
+  if (disc || idx || oth) {
+    const discountGross = (disc ?? ZERO).times(2);
+    const other = (idx ?? ZERO).plus(oth ?? ZERO);
+    return { discountGross, other, cashPortion: discountGross.plus(other), split: true };
+  }
+  const cg = tryD(t.capitalGainComponent);
+  if (!cg || cg.isZero()) return null;
+  return { discountGross: ZERO, other: cg, cashPortion: cg, split: false };
 }
 
 function capitalInputsForYear(fy: FYear, lots: LotEngineResult, deriv: DerivativeResult, txns: Transaction[], discountAllowed: boolean): YearCapital {
@@ -308,13 +317,27 @@ function capitalInputsForYear(fy: FYear, lots: LotEngineResult, deriv: Derivativ
     else losses = losses.plus(e.netAud.neg());
   }
   const trustTxnIds: string[] = [];
+  const trustUnsplitIds: string[] = [];
   for (const t of txns) {
-    if (t.fy !== fy || t.status !== 'active' || !t.capitalGainComponent) continue;
-    trust = trust.plus(D(t.capitalGainComponent));
+    if (t.fy !== fy || t.status !== 'active') continue;
+    const tc = trustCapital(t);
+    if (!tc) continue;
     trustTxnIds.push(t.id);
+    trust = trust.plus(tc.discountGross).plus(tc.other);
+    if (tc.split) {
+      // Grossed-up discount gains re-enter the netting so the investor's own discount applies after losses.
+      if (discountAllowed) disc = disc.plus(tc.discountGross);
+      else {
+        nonDisc = nonDisc.plus(tc.discountGross);
+        withheld = withheld.plus(tc.discountGross);
+      }
+      nonDisc = nonDisc.plus(tc.other);
+    } else {
+      nonDisc = nonDisc.plus(tc.other);
+      trustUnsplitIds.push(t.id);
+    }
   }
-  nonDisc = nonDisc.plus(trust);
-  return { disc, nonDisc, losses, trust, incomplete, disposals, derivCapital, trustTxnIds, withheld };
+  return { disc, nonDisc, losses, trust, incomplete, disposals, derivCapital, trustTxnIds, trustUnsplitIds, withheld };
 }
 
 /** Effective tax class of a ledger record (splits handled separately). */
@@ -350,9 +373,26 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
   const accountsById = new Map(data.accounts.map((a) => [a.id, a]));
 
   if (!rs) issues.push({ code: 'NO_RULES', severity: 'blocking', message: `No tax rule set is available for ${fyLabel(fy)} — tax cannot be estimated.`, txnIds: [] });
-  else if (rs.status !== 'verified') issues.push({ code: 'RULES_NOT_VERIFIED', severity: 'warning', message: `Tax rule set ${rs.id} is ${rs.status.replace('_', ' ')} — ${rs.notes.join(' ')}`.trim(), txnIds: [] });
+  else if (rs.status !== 'verified') issues.push({ code: 'RULES_NOT_VERIFIED', severity: rs.status === 'unverified' ? 'warning' : 'info', message: `Tax rule set ${rs.id} is ${rs.status.replace('_', ' ')} — ${rs.notes.join(' ')}`.trim(), txnIds: [] });
   if (!profile || residency === 'unknown') issues.push({ code: 'RESIDENCY_UNKNOWN', severity: 'blocking', message: 'Residency status for this year has not been recorded (Tax & Business → Tax profile).', txnIds: [] });
-  if (residency === 'working_holiday' || residency === 'part_year') issues.push({ code: 'RESIDENCY_UNSUPPORTED', severity: 'blocking', message: `Residency "${residency}" requires rates/adjustments not implemented — tax estimate unavailable.`, txnIds: [] });
+  const months = profile?.residentMonths ?? 0;
+  const partYearScale = residency === 'part_year' && rs ? partYearBrackets(rs, months) : null;
+  const whmScale = residency === 'working_holiday' ? (rs?.whmBrackets ?? null) : null;
+  if (residency === 'part_year') {
+    if (!partYearScale) {
+      issues.push({ code: 'RESIDENCY_UNSUPPORTED', severity: 'blocking', message: rs?.partYearThreshold ? 'Part-year resident: enter the number of months you were a resident (Tax profile) to pro-rate the tax-free threshold.' : `Part-year resident: the pro-rated tax-free threshold is not confirmed for ${fyLabel(fy)} — tax estimate unavailable.`, txnIds: [] });
+    } else {
+      issues.push({ code: 'PART_YEAR', severity: 'warning', message: `Part-year resident (${months} month${months === 1 ? '' : 's'}): tax-free threshold pro-rated to $${dstr(partYearThreshold(rs!, months)!)}. Only include foreign income earned while a resident. The Medicare levy shown is for a full year (exemption for the non-resident period not calculated) and full LITO is applied — confirm both.`, txnIds: [] });
+    }
+  }
+  if (residency === 'working_holiday') {
+    if (!whmScale) issues.push({ code: 'RESIDENCY_UNSUPPORTED', severity: 'blocking', message: `Working holiday maker rates are not confirmed for ${fyLabel(fy)} — tax estimate unavailable.`, txnIds: [] });
+    else issues.push({ code: 'WHM', severity: 'warning', message: 'Working holiday maker rates are applied to all taxable income (assumes it is all working holiday taxable income). Treated as a foreign resident: no LITO, no Medicare levy, no CGT discount. If you were an Australian resident, other income and the Medicare levy need specialist review.', txnIds: [] });
+  }
+  const flagParam = (param: string, label: string) => {
+    const c = checksFor(rs, param);
+    if (c && (c.status === 'conflicting' || c.status === 'unverified')) issues.push({ code: 'PARAM_UNCONFIRMED', severity: 'warning', message: `${label} for ${fyLabel(fy)} is ${c.status}: ${c.note ?? 'not confirmed against ATO sources.'}`, txnIds: [] });
+  };
   if (residency === 'non_resident') issues.push({ code: 'NON_RESIDENT', severity: 'warning', message: 'Non-resident: no tax-free threshold, no LITO, no Medicare levy, and CGT discount generally unavailable; only taxable Australian property is subject to CGT — review CGT events.', txnIds: [] });
 
   // ---------- trading accounts whose tax treatment is undetermined ----------
@@ -437,12 +477,12 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     for (const t of dists) {
       const total = audOf(t, t.amount);
       const deferred = audOf(t, t.taxDeferredAmount);
-      const cg = tryD(t.capitalGainComponent) ?? ZERO;
+      const cg = trustCapital(t)?.cashPortion ?? ZERO;
       const ord = total === null || deferred === null ? null : total.minus(deferred).minus(cg);
       ordinary = add(ordinary, ord);
       credits = credits.plus(D(t.frankingCredit));
     }
-    income.push(line('trust_dist', 'Trust / managed-fund distributions (excluding tax-deferred & capital gains)', ordinary, 'estimate', dists.map((t) => t.id), 'Cash distribution − tax-deferred component − capital-gain component.', ['Use the annual tax statement (AMMA) components; this is an approximation of item 13.']));
+    income.push(line('trust_dist', 'Trust / managed-fund distributions (excluding tax-deferred & capital gains)', ordinary, 'estimate', dists.map((t) => t.id), 'Cash distribution − tax-deferred component − capital-gain components (discounted gains counted ×2 to include the CGT concession amount).', ['Use the annual tax statement (AMMA) components; this is an approximation of item 13.']));
     if (credits.gt(0)) income.push(line('trust_franking', 'Franking credits from trusts', credits, 'recorded', dists.map((t) => t.id)));
     assessable = add(add(assessable, ordinary), credits);
   }
@@ -601,7 +641,7 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
   }
 
   // ---------- Capital gains (with prior-year chain) ----------
-  const allFys = new Set<number>([...lots.disposals.map((d) => d.fy), ...deriv.realised.map((e) => e.fy), ...data.transactions.filter((t) => t.capitalGainComponent).map((t) => t.fy)]);
+  const allFys = new Set<number>([...lots.disposals.map((d) => d.fy), ...deriv.realised.map((e) => e.fy), ...data.transactions.filter((t) => trustCapital(t)).map((t) => t.fy)]);
   const firstFy = Math.min(fy, ...[...allFys]);
   let carried = ZERO;
   let ny: ReturnType<typeof netCapitalGain> | null = null;
@@ -644,7 +684,8 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     incomplete: yc.incomplete,
     steps: cgt.steps
   };
-  if (yc.trust.gt(0)) issues.push({ code: 'TRUST_CG', severity: 'warning', message: 'Trust capital-gain components were treated as non-discount gross gains — confirm discount/indexation/other components from the AMMA statement.', txnIds: yc.trustTxnIds });
+  if (yc.trustUnsplitIds.length) issues.push({ code: 'TRUST_CG', severity: 'warning', message: 'Some trust capital-gain components were entered as a single amount and treated as non-discount gross gains — enter the discounted / indexation / other components from the AMMA statement.', txnIds: yc.trustUnsplitIds });
+  if (yc.trustTxnIds.length > yc.trustUnsplitIds.length) assumptions.push('Trust discounted capital gains (AMMA) are grossed up ×2 and the CGT discount is re-applied after losses; foreign-source trust gains and the trust’s own capital losses are not separately handled.');
   const cgtIds = [...yc.disposals.map((d) => d.txnId), ...yc.derivCapital.map((e) => e.txnId), ...yc.trustTxnIds];
   const capitalLines: TaxLine[] = [
     line('cgt_gross', 'Total current-year capital gains (gross)', yc.disc.plus(yc.nonDisc), 'calculated', cgtIds),
@@ -667,71 +708,246 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     grouped.set(i.code, arr);
   }
   for (const [code, ids] of grouped) {
-    const sev: Issue['severity'] = code === 'MISSING_COST_BASE' || code === 'MISSING_RATE' ? 'blocking' : code.startsWith('REVIEW') || code === 'UNMATCHED_TRANSFER' || code === 'POSSIBLE_DOUBLE_COUNT' ? 'warning' : 'info';
+    const sev: Issue['severity'] = code === 'MISSING_COST_BASE' || code === 'MISSING_RATE' ? 'blocking' : code.startsWith('REVIEW') || code === 'UNMATCHED_TRANSFER' || code === 'POSSIBLE_DOUBLE_COUNT' || code === 'PRE_CGT' ? 'warning' : 'info';
     const sample = [...lots.issues, ...deriv.issues].find((i) => i.code === code)!;
     issues.push({ code, severity: sev, message: ids.length > 1 ? `${sample.message} (+${ids.length - 1} similar)` : sample.message, txnIds: ids });
   }
 
-  // ---------- Taxable income & estimate ----------
+  // ---------- Franking: small shareholder exemption / 45-day holding period ----------
+  const frankingCredits = txnsFY.filter((t) => t.kind === 'income').reduce((acc, t) => acc.plus(D(t.frankingCredit)), ZERO);
+  const frankedDivs = incomeTxns.filter((t) => effClass(t) === 'DIVIDEND' && D(t.frankingCredit).gt(0));
+  if (frankingCredits.gt(5000)) {
+    const noDate = frankedDivs.filter((t) => !t.exDividendDate || !t.instrumentId);
+    const atRisk: string[] = [];
+    const tested: string[] = [];
+    for (const t of frankedDivs.filter((x) => x.exDividendDate && x.instrumentId)) {
+      const ex = t.exDividendDate!;
+      const end = addDays(ex, 45);
+      const quick = lots.disposals.filter((d) => d.instrumentId === t.instrumentId && d.disposedDate >= ex && d.disposedDate <= end && d.allocations.some((al) => al.acquiredDate && al.heldDays - 1 < 45));
+      (quick.length ? atRisk : tested).push(t.id);
+    }
+    issues.push({ code: 'FRANKING_HOLDING_PERIOD', severity: noDate.length || atRisk.length ? 'warning' : 'info', message: `Franking credits total $${dstr(frankingCredits)} (> $5,000 small shareholder exemption), so the 45-day holding period rule applies. ${atRisk.length ? `${atRisk.length} dividend(s) had shares sold within 45 days of the ex-dividend date after being held fewer than 45 days — possible failure. ` : ''}${noDate.length ? `${noDate.length} franked dividend(s) have no ex-dividend date or instrument, so they could not be tested. ` : ''}${tested.length ? `${tested.length} passed the recorded-trade check. ` : ''}The check uses recorded trades only (the ATO's last-in-first-out parcel rule, options, short sales and other risk-reducing positions are not tested). Credits are not removed automatically.`, txnIds: [...atRisk, ...noDate.map((t) => t.id)] });
+  } else if (frankingCredits.gt(0)) {
+    assumptions.push(`Franking credits total $${dstr(frankingCredits)} — within the $5,000 small shareholder exemption, so the 45-day holding period rule is not tested (a related-payments obligation would still require review).`);
+  }
+
+  // ---------- Capital account review checks ----------
+  const instById = new Map(data.instruments.map((i) => [i.id, i]));
+  const lossDisposals = lots.disposals.filter((x) => x.fy === fy && x.taxClass === 'CGT_EVENT' && x.lossAud.gt(0));
+  const acquiredOn = new Map<string, { id: string; date: string }[]>();
+  if (lossDisposals.length) {
+    const wanted = new Set(lossDisposals.map((d) => d.instrumentId));
+    for (const t of data.transactions) {
+      if (t.status !== 'active' || t.kind !== 'trade') continue;
+      const inst = t.side === 'buy' ? t.instrumentId : t.side === 'swap' ? t.counterInstrumentId : undefined;
+      if (!inst || !wanted.has(inst)) continue;
+      const arr = acquiredOn.get(inst) ?? [];
+      arr.push({ id: t.id, date: t.date });
+      acquiredOn.set(inst, arr);
+    }
+  }
+  for (const arr of acquiredOn.values()) arr.sort((x, y) => (x.date < y.date ? -1 : x.date > y.date ? 1 : 0));
+  const lowerBound = (arr: { date: string }[], date: string) => {
+    let l = 0;
+    let h = arr.length;
+    while (l < h) {
+      const m = (l + h) >> 1;
+      if (arr[m].date < date) l = m + 1;
+      else h = m;
+    }
+    return l;
+  };
+  const washIds: string[] = [];
+  for (const d of lossDisposals) {
+    const lo = addDays(d.disposedDate, -30);
+    const hi = addDays(d.disposedDate, 30);
+    const arr = acquiredOn.get(d.instrumentId) ?? [];
+    let i = lowerBound(arr, lo);
+    for (; i < arr.length && arr[i].date <= hi; i++) {
+      if (arr[i].id !== d.txnId) {
+        washIds.push(d.txnId);
+        break;
+      }
+    }
+  }
+  if (washIds.length) issues.push({ code: 'WASH_SALE_REVIEW', severity: 'warning', message: `${washIds.length} capital loss disposal(s) were re-acquired within 30 days (same asset). The ATO may disregard losses from wash sales under Part IVA (TR 2008/1). The 30-day window is a review heuristic, not a rule — losses are still included; review.`, txnIds: washIds });
+  const smallCrypto = lots.disposals.filter((d) => d.fy === fy && d.taxClass === 'CGT_EVENT' && ['crypto', 'nft'].includes(instById.get(d.instrumentId)?.assetClass ?? '') && d.costAud !== null && d.costAud.lte(10000));
+  if (smallCrypto.length) issues.push({ code: 'PERSONAL_USE_NOT_APPLIED', severity: 'info', message: `${smallCrypto.length} crypto/NFT disposal(s) cost $10,000 or less. The personal-use asset exemption (ITAA 1997 s 118-10) is NOT applied: it rarely applies to crypto held as an investment or traded. If an asset was acquired mainly to buy items for personal use, review with your agent.`, txnIds: smallCrypto.map((d) => d.txnId) });
+  const fxCash = txnsFY.filter((t) => isFiat(t.currency) && t.currency.toUpperCase() !== 'AUD' && (t.kind === 'trade' || t.kind === 'cash' || t.kind === 'transfer' || t.kind === 'income'));
+  if (fxCash.length) {
+    const elected = profile?.forexLimitedBalanceElection === 'yes';
+    issues.push({
+      code: 'FOREX_DIV775',
+      severity: elected ? 'info' : 'warning',
+      message: elected
+        ? 'Limited balance election recorded: forex gains/losses on withdrawals from qualifying foreign currency accounts are disregarded while combined credit (and debit) balances stay at or below A$250,000 (not tested here). The election does not cover gains on depositing foreign currency (forex realisation event 1).'
+        : `${fxCash.length} record(s) involve foreign currency balances. Forex realisation gains/losses (Div 775) when foreign currency is converted or spent are NOT calculated — only gains on the shares/assets themselves are. Small personal amounts may be disregarded (e.g. a limited balance election for accounts up to A$250,000) — record the election in the Tax profile or ask your agent.`,
+      txnIds: fxCash.slice(0, 200).map((t) => t.id)
+    });
+  }
+
+  // ---------- Taxable income, losses carried forward & estimate ----------
   const offsetsAndCredits: TaxLine[] = [];
   const estimate: TaxLine[] = [];
   const totalIncome = assessable;
-  const ti = totalIncome === null || totalDeductions === null ? null : toWholeDollarsDown(Decimal.max(ZERO, totalIncome.minus(totalDeductions)));
-  const rawTi = totalIncome === null || totalDeductions === null ? null : totalIncome.minus(totalDeductions);
-  if (rawTi !== null && rawTi.lt(0)) issues.push({ code: 'TAX_LOSS', severity: 'warning', message: 'Deductions exceed assessable income — a tax loss may arise (carry-forward of revenue losses not computed).', txnIds: [] });
+  const rawNet = totalIncome === null || totalDeductions === null ? null : totalIncome.minus(totalDeductions);
+  const openingRevLoss = D(profile?.openingRevenueLosses);
+  let revLossApplied = ZERO;
+  let revLossCf: Decimal | null = null;
+  if (rawNet !== null) {
+    if (rawNet.gt(0)) revLossApplied = Decimal.min(openingRevLoss, rawNet);
+    revLossCf = openingRevLoss.minus(revLossApplied).plus(rawNet.lt(0) ? rawNet.neg() : ZERO);
+  }
+  const ti = rawNet === null ? null : toWholeDollarsDown(Decimal.max(ZERO, rawNet.minus(revLossApplied)));
+  if (rawNet !== null && rawNet.lt(0)) issues.push({ code: 'TAX_LOSS', severity: 'warning', message: `Deductions exceed assessable income — a tax loss of $${dstr(rawNet.neg())} is carried forward. Non-commercial loss rules (Div 35) and net exempt income are not tested.`, txnIds: [] });
+  if (openingRevLoss.gt(0)) issues.push({ code: 'PRIOR_TAX_LOSSES', severity: 'info', message: `Prior-year tax losses entered: $${dstr(openingRevLoss)}; $${dstr(revLossApplied)} deducted this year. Losses must be reduced by net exempt income (not calculated) and deferred non-commercial business losses are not tax losses — confirm with your agent.`, txnIds: [] });
 
-  const frankingCredits = txnsFY.filter((t) => t.kind === 'income').reduce((acc, t) => acc.plus(D(t.frankingCredit)), ZERO);
-  const fitoClaim = foreignTax === null ? null : Decimal.min(foreignTax, new Decimal(rs?.fitoDeMinimis ?? 1000));
-  if (foreignTax !== null && foreignTax.gt(rs?.fitoDeMinimis ?? 1000)) issues.push({ code: 'FITO_LIMIT', severity: 'warning', message: `Foreign tax paid exceeds $${rs?.fitoDeMinimis ?? 1000}: offset limited to the de minimis amount pending a FITO limit calculation.`, txnIds: ftIds });
   const instalments = D(profile?.paygInstalments);
   const otherOffsets = D(profile?.otherOffsets);
+  const rfb = D(profile?.reportableFringeBenefits);
+  const rsc = D(profile?.reportableSuperContributions);
+  const nil = D(profile?.netInvestmentLoss);
+  const efei = D(profile?.exemptForeignEmploymentIncome);
+
+  // Foreign income (gross, AUD) for the FITO limit: foreign-income records and any record with foreign tax paid.
+  const foreignIncomeTxns = incomeTxns.filter((t) => effClass(t) === 'FOREIGN_INCOME' || D(t.foreignTaxPaid).gt(0));
+  const foreignIncomeAud = foreignIncomeTxns.reduce<Decimal | null>((acc, t) => add(acc, incomeValue(t)), ZERO);
 
   let estimateStatus: TaxYearResult['estimateStatus'] = 'estimate';
   const blocking = issues.filter((i) => i.severity === 'blocking');
-  if (!rs || residency === 'unknown' || residency === 'working_holiday' || residency === 'part_year') estimateStatus = 'not_available';
+  const scale: Bracket[] | null = !rs ? null : residency === 'resident' ? rs.residentBrackets : residency === 'non_resident' ? rs.nonResidentBrackets : residency === 'part_year' ? partYearScale : residency === 'working_holiday' ? whmScale : null;
+  if (!rs || !scale) estimateStatus = 'not_available';
   else if (ti === null || blocking.length) estimateStatus = 'incomplete';
 
   estimate.push(line('total_income', 'Total assessable income', totalIncome, 'calculated', []));
   estimate.push(line('total_deductions', 'Total deductions claimed', totalDeductions, 'calculated', []));
-  estimate.push(line('taxable_income', 'Estimated taxable income (whole dollars)', ti, blocking.length ? 'incomplete' : 'estimate', [], 'Assessable income − deductions, cents ignored.'));
+  if (openingRevLoss.gt(0)) estimate.push(line('prior_tax_losses', 'Less: prior-year tax losses deducted', rawNet === null ? null : revLossApplied, 'estimate', [], 'Lesser of losses carried in and income after deductions.'));
+  estimate.push(line('taxable_income', 'Estimated taxable income (whole dollars)', ti, blocking.length ? 'incomplete' : 'estimate', [], 'Assessable income − deductions − prior-year tax losses, cents ignored.'));
 
   let netPayable: Decimal | null = null;
-  if (estimateStatus !== 'not_available' && rs && ti !== null) {
-    const resident = residency === 'resident';
-    const brackets = resident ? rs.residentBrackets : rs.nonResidentBrackets;
-    if (!brackets) {
-      estimateStatus = 'not_available';
-    } else {
-      const gross = taxOnBrackets(ti, brackets);
-      const lito = resident ? Decimal.min(litoAmount(ti, rs), gross) : ZERO;
-      const ml = resident
-        ? profile?.medicareExemption === 'unknown'
-          ? { levy: null as Decimal | null, note: 'Medicare levy exemption status unknown.', reliable: false }
-          : medicareLevy(ti, rs, profile?.medicareExemption ?? 'none')
-        : { levy: ZERO, note: 'Non-residents do not pay the Medicare levy.', reliable: true };
-      if (!ml.reliable) issues.push({ code: 'MEDICARE_ESTIMATE', severity: 'warning', message: `Medicare levy: ${ml.note}`, txnIds: [] });
-      estimate.push(line('gross_tax', 'Tax on taxable income', gross, 'estimate', [], `${resident ? 'Resident' : 'Non-resident'} rates, rule set ${rs.id}.`));
-      if (resident) estimate.push(line('lito', 'Less: low income tax offset', lito, 'estimate', [], 'LITO (non-refundable, limited to tax payable).'));
-      estimate.push(line('medicare', 'Medicare levy', ml.levy, ml.reliable ? 'estimate' : 'review', [], ml.note));
-      const afterNonRef = Decimal.max(ZERO, gross.minus(lito).minus(fitoClaim ?? ZERO).minus(otherOffsets));
-      offsetsAndCredits.push(line('franking_offset', 'Franking credit offset (refundable)', frankingCredits, 'recorded', txnsFY.filter((t) => t.frankingCredit).map((t) => t.id)));
-      offsetsAndCredits.push(line('fito', 'Foreign income tax offset (claimed)', fitoClaim, 'estimate', ftIds));
-      offsetsAndCredits.push(line('payg_withheld', 'PAYG tax withheld', taxWithheld, 'recorded', withheldIds));
-      if (instalments.gt(0)) offsetsAndCredits.push(line('payg_instalments', 'PAYG instalments paid', instalments, 'recorded', []));
-      if (otherOffsets.gt(0)) offsetsAndCredits.push(line('other_offsets', `Other offsets (user-entered${profile?.otherOffsetsNote ? ': ' + profile.otherOffsetsNote : ''})`, otherOffsets, 'recorded', []));
-      netPayable = ml.levy === null ? null : afterNonRef.plus(ml.levy).minus(frankingCredits).minus(taxWithheld).minus(instalments);
-      estimate.push(line('net_payable', 'Estimated tax payable / (refund)', netPayable, estimateStatus === 'incomplete' ? 'incomplete' : 'estimate', [], 'Tax − LITO − FITO − other offsets + Medicare − franking credits − PAYG withheld − instalments.'));
+  let mlsOut: Decimal | null = null;
+  let helpOut: Decimal | null = null;
+  let fitoClaimed: Decimal | null = null;
+  if (estimateStatus !== 'not_available' && rs && scale && ti !== null) {
+    const residentLike = residency === 'resident' || residency === 'part_year';
+    if (residency === 'resident') flagParam('residentBrackets', 'Resident tax rates');
+    if (residency === 'non_resident') flagParam('nonResidentBrackets', 'Foreign resident tax rates');
+    if (residency === 'part_year') flagParam('partYearThreshold', 'Part-year tax-free threshold');
+    if (residency === 'working_holiday') flagParam('whmBrackets', 'Working holiday maker rates');
+    if (residentLike) {
+      flagParam('lito', 'Low income tax offset');
+      flagParam('medicareLowIncome', 'Medicare levy low-income thresholds');
     }
+    const children = Math.max(0, Math.floor(profile?.dependants ?? 0));
+    const family: FamilyInput = { hasFamily: profile?.spouse === 'yes' || children > 0, spouse: profile?.spouse === 'yes', spouseTaxableIncome: tryD(profile?.spouseTaxableIncome), children };
+    if (residentLike && profile?.spouse === 'unknown') assumptions.push('Spouse status unknown — Medicare levy and MLS use single thresholds.');
+    const levyAt = (x: Decimal): LevyResult =>
+      residentLike
+        ? profile?.medicareExemption === 'unknown'
+          ? { levy: null, note: 'Medicare levy exemption status unknown.', reliable: false }
+          : medicareLevy(x, rs, profile?.medicareExemption ?? 'none', family)
+        : { levy: ZERO, note: residency === 'working_holiday' ? 'Working holiday maker treated as a foreign resident: no Medicare levy.' : 'Foreign residents do not pay the Medicare levy.', reliable: true };
+    // MLS
+    const cover = profile?.privateHospitalCover ?? 'unknown';
+    const yearDays = daysInFy(fy);
+    const mlsAt = (x: Decimal) =>
+      mlsAmount(rs, {
+        ti: x,
+        rfb,
+        reportableSuper: rsc,
+        netInvestmentLoss: nil,
+        exemptForeignEmployment: efei,
+        family: family.hasFamily,
+        spouseMlsIncome: family.spouse ? tryD(profile?.spouseMlsIncome) : ZERO,
+        children,
+        daysWithoutCover: cover === 'yes' ? (profile?.daysWithoutCover ?? 0) : (profile?.daysWithoutCover ?? yearDays),
+        daysInYear: yearDays
+      });
+    let mlsNote: string;
+    let mlsAmt: Decimal | null = null;
+    if (residency !== 'resident') mlsNote = residency === 'part_year' ? 'MLS for part-year residents not calculated.' : 'MLS does not apply to foreign residents.';
+    else if (cover === 'unknown') mlsNote = 'Private hospital cover status unknown — MLS not calculated.';
+    else if (profile?.medicareExemption === 'full' || profile?.medicareExemption === 'half') mlsNote = 'Medicare levy exemption recorded — MLS for exemption periods not calculated.';
+    else {
+      const m = mlsAt(ti);
+      mlsAmt = m.amount;
+      mlsNote = m.note;
+    }
+    if (residency === 'resident' && mlsAmt === null) issues.push({ code: 'MLS_NOT_COMPUTED', severity: cover === 'yes' ? 'info' : 'warning', message: `Medicare levy surcharge not included: ${mlsNote}`, txnIds: [] });
+    if (residency === 'part_year' && cover !== 'yes') issues.push({ code: 'MLS_NOT_COMPUTED', severity: 'warning', message: mlsNote, txnIds: [] });
+    mlsOut = mlsAmt;
+
+    const gross = taxOnBrackets(ti, scale);
+    const lito = residentLike ? Decimal.min(litoAmount(ti, rs), gross) : ZERO;
+    const ml = levyAt(ti);
+    if (!ml.reliable) issues.push({ code: 'MEDICARE_ESTIMATE', severity: 'warning', message: `Medicare levy: ${ml.note}`, txnIds: [] });
+    const scaleName = residency === 'resident' ? 'Resident' : residency === 'non_resident' ? 'Foreign resident' : residency === 'part_year' ? `Part-year resident (${months} months)` : 'Working holiday maker';
+    estimate.push(line('gross_tax', 'Tax on taxable income', gross, 'estimate', [], `${scaleName} rates, rule set ${rs.id}.`));
+    if (residentLike) estimate.push(line('lito', 'Less: low income tax offset', lito, 'estimate', [], 'LITO (non-refundable, limited to tax payable).'));
+    estimate.push(line('medicare', 'Medicare levy', ml.levy, ml.reliable ? 'estimate' : 'review', [], ml.note));
+    if (residentLike) estimate.push({ ...line('mls', 'Medicare levy surcharge', mlsAmt, 'estimate', [], mlsNote), status: mlsAmt === null ? 'review' : 'estimate' });
+
+    // FITO with limit calculation above the de minimis amount
+    const deMin = rs.fitoDeMinimis;
+    let limit: Decimal | null = null;
+    if (foreignTax !== null && foreignTax.gt(deMin)) {
+      if (foreignIncomeAud === null || ml.levy === null) {
+        issues.push({ code: 'FITO_LIMIT', severity: 'warning', message: `Foreign tax paid exceeds $${deMin} but the offset limit cannot be calculated (missing exchange rates or Medicare levy inputs) — offset limited to $${deMin}.`, txnIds: ftIds });
+      } else {
+        const tiEx = toWholeDollarsDown(Decimal.max(ZERO, ti.minus(foreignIncomeAud)));
+        const mlsEx = residency === 'resident' && mlsAmt !== null ? mlsAt(tiEx).amount : ZERO;
+        const step1 = gross.plus(ml.levy).plus(mlsAmt ?? ZERO);
+        const step2 = taxOnBrackets(tiEx, scale).plus(levyAt(tiEx).levy ?? ZERO).plus(mlsEx ?? ZERO);
+        limit = fitoLimit(step1, step2, deMin);
+        issues.push({
+          code: 'FITO_LIMIT',
+          severity: 'warning',
+          message: `FITO limit calculated: step 1 $${step1.toFixed(2)} − step 2 $${step2.toFixed(2)} (taxable income without $${dstr(foreignIncomeAud)} foreign income) → limit $${limit.toFixed(2)}. Deductions related to foreign income are assumed nil (limit may be overstated); foreign capital gains are not identified; excess foreign tax cannot be carried forward.${residency === 'resident' && mlsAmt === null ? ' MLS not included in the steps.' : ''}`,
+          txnIds: ftIds
+        });
+      }
+    }
+    fitoClaimed = foreignTax === null ? null : fitoClaim(foreignTax, limit, deMin);
+
+    // HELP
+    const repaymentIncome = ti.plus(rfb).plus(nil).plus(rsc).plus(efei);
+    let helpNote = '';
+    if (profile?.helpDebt === 'yes') {
+      if (residency !== 'resident') {
+        issues.push({ code: 'HELP_NOT_COMPUTED', severity: 'warning', message: 'HELP/study-loan repayment for non-residents and part-year residents (overseas repayment obligations) is not calculated.', txnIds: [] });
+      } else {
+        const r = helpRepayment(rs, repaymentIncome);
+        flagParam('help', 'Study-loan repayment thresholds');
+        if (r === null) issues.push({ code: 'HELP_NOT_COMPUTED', severity: 'warning', message: `HELP/study-loan repayment thresholds for ${fyLabel(fy)} are not entered or not confirmed — repayment not calculated or included.`, txnIds: [] });
+        else {
+          const bal = tryD(profile?.helpBalance);
+          helpOut = bal !== null ? Decimal.min(r, bal) : r;
+          helpNote = `Repayment income $${dstr(repaymentIncome)} (taxable income + RFB + net investment loss + reportable super + exempt foreign employment income)${bal !== null && bal.lt(r) ? `; capped at the loan balance $${dstr(bal)}` : bal === null ? '; loan balance not entered (repayment cannot exceed it)' : ''}.`;
+          estimate.push(line('help', 'Compulsory study-loan repayment', helpOut, 'estimate', [], helpNote));
+        }
+      }
+    } else if (profile?.helpDebt !== 'no') {
+      issues.push({ code: 'HELP_NOT_COMPUTED', severity: 'info', message: 'Study-loan (HELP) status not recorded — no repayment included.', txnIds: [] });
+    }
+
+    const afterNonRef = Decimal.max(ZERO, gross.minus(lito).minus(fitoClaimed ?? ZERO).minus(otherOffsets));
+    offsetsAndCredits.push(line('franking_offset', 'Franking credit offset (refundable)', frankingCredits, 'recorded', txnsFY.filter((t) => t.frankingCredit).map((t) => t.id)));
+    offsetsAndCredits.push(line('fito', 'Foreign income tax offset (claimed)', fitoClaimed, 'estimate', ftIds, limit ? `Lesser of foreign tax paid and the calculated limit $${limit.toFixed(2)}.` : `Foreign tax paid up to the $${deMin} default limit.`));
+    offsetsAndCredits.push(line('payg_withheld', 'PAYG tax withheld', taxWithheld, 'recorded', withheldIds));
+    if (instalments.gt(0)) offsetsAndCredits.push(line('payg_instalments', 'PAYG instalments paid', instalments, 'recorded', []));
+    if (otherOffsets.gt(0)) offsetsAndCredits.push(line('other_offsets', `Other offsets (user-entered${profile?.otherOffsetsNote ? ': ' + profile.otherOffsetsNote : ''})`, otherOffsets, 'recorded', []));
+    netPayable = ml.levy === null ? null : afterNonRef.plus(ml.levy).plus(mlsAmt ?? ZERO).plus(helpOut ?? ZERO).minus(frankingCredits).minus(taxWithheld).minus(instalments);
+    estimate.push(line('net_payable', 'Estimated tax payable / (refund)', netPayable, estimateStatus === 'incomplete' ? 'incomplete' : 'estimate', [], `Tax − LITO − FITO − other offsets + Medicare levy${residentLike ? ' + MLS' : ''}${helpOut !== null ? ' + study-loan repayment' : ''} − franking credits − PAYG withheld − instalments.${residentLike && mlsAmt === null ? ' MLS not included (see issues).' : ''}`));
+  } else if (profile?.helpDebt === 'yes') {
+    issues.push({ code: 'HELP_NOT_COMPUTED', severity: 'warning', message: 'HELP/study-loan repayment not calculated (no tax estimate available).', txnIds: [] });
   }
-  if (profile?.helpDebt !== 'no') issues.push({ code: 'HELP_NOT_COMPUTED', severity: profile?.helpDebt === 'yes' ? 'warning' : 'info', message: 'HELP/study-loan repayments are not calculated.', txnIds: [] });
-  if (profile?.privateHospitalCover !== 'yes' && residency === 'resident') issues.push({ code: 'MLS_NOT_COMPUTED', severity: 'info', message: 'Medicare levy surcharge is not calculated — confirm private hospital cover and income for MLS purposes.', txnIds: [] });
   if (reviewItems.length) issues.push({ code: 'REVIEW_ITEMS', severity: 'warning', message: `${reviewItems.length} item(s) await classification or specialist review and are excluded from totals.`, txnIds: [...new Set(reviewItems.map((r) => r.txnId))] });
   const unclassified = txnsFY.filter((t) => t.taxClass === 'UNCLASSIFIED');
   if (unclassified.length) issues.push({ code: 'UNCLASSIFIED', severity: 'blocking', message: `${unclassified.length} transaction(s) are unclassified.`, txnIds: unclassified.map((t) => t.id) });
 
   assumptions.push(
     'Amounts are AUD, converted per transaction at the recorded historical rate; original amounts are retained.',
-    'Taxable income uses singles thresholds; family/spouse adjustments are not applied.',
+    'Medicare levy family test: only the confirmed thresholds are applied (nil levy at or below the family threshold; no reduction above the family limit). The reduction amount in between is not calculated.',
     `Capital losses ordering: ${capital.lossOrdering.toLowerCase()}.`,
     'CGT discount (50%) only for capital-account assets held at least 12 months (excluding acquisition and disposal days) by a resident individual.',
     'Brokerage on CGT assets is included in the cost base or reduces proceeds — it is not separately deducted.'
@@ -752,6 +968,10 @@ export function computeTaxYear(input: TaxEngineInput): TaxYearResult {
     taxableIncome: s(ti),
     netCapitalGain: yc.incomplete ? null : dstr(cgt.net),
     capitalLossesCarriedForward: yc.incomplete ? null : dstr(cgt.carryForward),
+    revenueLossesCarriedForward: s(revLossCf),
+    medicareLevySurcharge: s(mlsOut),
+    studyLoanRepayment: s(helpOut),
+    fitoClaimed: s(fitoClaimed),
     frankingCredits: dstr(frankingCredits),
     taxWithheld: dstr(taxWithheld),
     foreignTaxPaid: s(foreignTax),

@@ -80,7 +80,7 @@ export const TARGET_FIELDS: Record<ImportTarget, FieldDef[]> = {
   income: [...COMMON, ...TAXY],
   expense: [...COMMON, ...TAXY],
   bank: COMMON,
-  dividend: [...COMMON, ...TAXY, F('symbol', 'Symbol', ['symbol', 'ticker', 'code', 'security']), F('quantity', 'Units held', ['units', 'quantity', 'holding']), F('taxDeferred', 'Tax-deferred amount', ['tax deferred', 'return of capital', 'tax-deferred']), F('capitalGain', 'Capital gain component (AUD)', ['capital gain', 'capital gains'])],
+  dividend: [...COMMON, ...TAXY, F('symbol', 'Symbol', ['symbol', 'ticker', 'code', 'security']), F('quantity', 'Units held', ['units', 'quantity', 'holding']), F('taxDeferred', 'Tax-deferred amount', ['tax deferred', 'return of capital', 'tax-deferred']), F('capitalGain', 'Capital gain component (AUD)', ['capital gain', 'capital gains']), F('cgDiscounted', 'Discounted capital gain (AMMA, AUD)', ['discounted capital gain', 'discounted capital gains', 'capital gains discounted method']), F('cgIndexation', 'Capital gain — indexation method (AUD)', ['capital gains indexation method', 'indexed capital gain']), F('cgOther', 'Capital gain — other method (AUD)', ['capital gains other method', 'other capital gain', 'non-discounted capital gain']), F('exDividendDate', 'Ex-dividend date', ['ex date', 'ex-dividend date', 'ex dividend date', 'ex-date'])],
   trade: [...COMMON, ...TRADE],
   transfer: [...COMMON, ...TRADE],
   prop: [...COMMON, ...TAXY, F('side', 'Type (payout / fee / refund)', ['type', 'transaction type', 'kind'], { required: true })],
