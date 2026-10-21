@@ -1,7 +1,7 @@
 # Test report
 
 Environment of the recorded run: Linux container, Node.js 22.22.0, Chromium (Playwright 1.56.1 bundled build),
-Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.9.1.
+Vitest 2.1.4 with jsdom 25 and `fake-indexeddb`. Date of run: 20 October 2026 (Australia/Sydney), version 1.9.2.
 
 ## Commands and results
 
@@ -190,7 +190,7 @@ pre-CGT, blocking issues); indexation date boundary; s 8D(3)(c) married-person M
    the delete needs `RESET` typed; demo accounts are gone; deleting everything returns to the Welcome screen.
 3j. **Grouped categories** — Add an expense lists “Paid ads (PPC)”, “Influencer & affiliate payouts”, “Native & solo ads”
    under a Marketing & advertising heading; a $450 paid-ads expense appears on its own line under Side projects and
-   business on the Tax summary.
+   business on the Tax summary; with no description typed, its description stays blank.
 3d. **Year selector** — defaults to *Current year*; a picked year stays after reload; *Current year* can be chosen again.
 
 ### Interactive tutorials (`tests/e2e/tutorials.spec.ts`)

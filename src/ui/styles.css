@@ -226,8 +226,9 @@ table.dt tfoot td { font-weight: 600; background: var(--panel-2); }
 .simple-page { max-width: 1100px; }
 .simple-page h1 { font-size: 22px; font-weight: 500; }
 .simple-sub { color: var(--muted); margin: 2px 0 14px; }
-.bubbles { display: flex; flex-wrap: wrap; gap: 18px; justify-content: center; margin: 8px 0 18px; }
-.bubble { width: 150px; height: 150px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; padding: 10px; border: none; cursor: pointer; font: inherit; box-shadow: var(--shadow); }
+/* Headline tiles: equal-width rectangles that share the full width of their area. */
+.bubbles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin: 8px 0 18px; }
+.bubble { width: 100%; min-height: 104px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; text-align: center; padding: 16px 12px; border: none; cursor: pointer; font: inherit; box-shadow: var(--shadow); }
 .bubble:hover { filter: brightness(1.05); }
 .bubble .big { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .bubble .small { font-size: 12px; opacity: 0.92; margin-top: 4px; }

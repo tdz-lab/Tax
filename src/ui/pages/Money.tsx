@@ -248,7 +248,7 @@ export function QuickMoneyModal({ direction, accountId, onClose }: { direction: 
         saveTransaction({
           kind: direction === 'in' ? 'income' : 'expense',
           date: f.date,
-          description: f.description || cat?.name || (direction === 'in' ? 'Income' : 'Expense'),
+          description: f.description.trim(), // left blank when you leave it blank — the category shows what it was
           amount: f.amount!,
           currency: f.currency.toUpperCase(),
           category: f.category,
@@ -406,16 +406,16 @@ export function Money() {
           </p>
         </div>
         <div>
-          <div className="bubbles" style={{ justifyContent: 'flex-start' }}>
-            <div className="bubble green" style={{ width: 128, height: 128 }}>
+          <div className="bubbles">
+            <div className="bubble green">
               <div className="big">{shown.length}</div>
               <div className="small">Records</div>
             </div>
-            <div className="bubble blue" style={{ width: 128, height: 128 }}>
+            <div className="bubble blue">
               <div className="big">{shown.length - uncategorised}</div>
               <div className="small">Categorised</div>
             </div>
-            <div className={`bubble ${uncategorised ? 'amber' : 'slate'}`} style={{ width: 128, height: 128 }}>
+            <div className={`bubble ${uncategorised ? 'amber' : 'slate'}`}>
               <div className="big">{uncategorised}</div>
               <div className="small">Need a category</div>
             </div>

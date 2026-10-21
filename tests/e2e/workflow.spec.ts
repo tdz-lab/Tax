@@ -617,6 +617,11 @@ test('expenses: categories grouped under headings; business expenses broken down
   await sel.selectOption({ label: 'Paid ads (PPC)' });
   await d.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('cell', { name: 'Paid ads (PPC)' }).first()).toBeVisible();
+  // No description typed → the description stays blank (not filled in with the category name).
+  const rec = page.locator('table:has(th:text-is("Description")) tbody tr', { hasText: 'Paid ads (PPC)' });
+  const descCol = await page.locator('table:has(th:text-is("Description")) thead th').evaluateAll((ths) => ths.findIndex((th) => th.textContent?.trim().startsWith('Description')));
+  expect(descCol).toBeGreaterThan(0);
+  await expect(rec.locator('td').nth(descCol)).toHaveText('');
   await page.goto('./#/tax-summary');
   const side = page.locator('.panel', { has: page.getByRole('heading', { name: 'Side projects and business' }) });
   await expect(side.getByRole('row', { name: /Paid ads \(PPC\)/ })).toContainText('$450.00');
